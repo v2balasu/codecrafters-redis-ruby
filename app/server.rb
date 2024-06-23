@@ -10,13 +10,20 @@ class YourRedisServer # rubocop:disable Style/Documentation
     @server ||= TCPServer.new(@port)
   end
 
+  def create_connection(socket:)
+    # TODO: Pooling and state management
+    Thread.new do 
+      connection = RedisClientConnection.new(socket: socket)
+      connection.start
+    end 
+  end
+
   def start
     loop do
       socket = server.accept
       next unless socket 
 
-      connection = RedisClientConnection.new(socket: socket)
-      Thread.new { connection.start }
+      create_connection(socket: socket)
     end
   end
 end
