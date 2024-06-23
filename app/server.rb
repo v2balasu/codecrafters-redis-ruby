@@ -1,13 +1,20 @@
-require "socket"
+require 'socket'
 
-class YourRedisServer
+class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port)
     @port = port
   end
 
+  def server
+    @server ||= TCPServer.new(@port)
+  end
+
   def start
-    server = TCPServer.new(@port)
     client = server.accept
+
+    loop do
+      client.puts "+PONG\r\n"
+    end
   end
 end
 
