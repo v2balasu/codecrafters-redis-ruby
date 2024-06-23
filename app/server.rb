@@ -12,10 +12,11 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def start
     client = server.accept
     loop do
-      client.gets
-      client.puts "+PONG\r\n"
+      msg = client.gets
+      client.puts "+OK\r\n" if msg.start_with?('COMMAND')
+      client.puts "+PONG\r\n" if msg.include?('PING')
     rescue StandardError
-      # client = server.accept
+      client = server.accept
     end
   end
 end
