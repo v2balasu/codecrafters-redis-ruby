@@ -1,4 +1,5 @@
 require 'socket'
+require_relative './redis_client_connection'
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port)
@@ -10,13 +11,12 @@ class YourRedisServer # rubocop:disable Style/Documentation
   end
 
   def start
-    client = server.accept
     loop do
-      msg = client.gets
-      client.puts "+OK\r\n" if msg.start_with?('COMMAND')
-      client.puts "+PONG\r\n" if msg.include?('PING')
-    rescue StandardError
-      client = server.accept
+      socket = server.accept
+      next unless socket 
+
+      connection = RedisClientConnection.new(socket: socket)
+      Thread.new { connection.start }
     end
   end
 end
