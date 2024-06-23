@@ -12,6 +12,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def start
     client = server.accept
     loop do
+      client.gets
       client.puts "+PONG\r\n"
     rescue StandardError
       # client = server.accept
