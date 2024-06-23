@@ -14,7 +14,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
     loop do
       client.puts "+PONG\r\n"
     rescue StandardError
-      client = server.accept
+      # client = server.accept
     end
   end
 end
