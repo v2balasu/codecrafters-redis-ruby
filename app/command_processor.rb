@@ -19,6 +19,8 @@ class CommandProcessor
       raise InvalidCommandError, "#{command} is not a valid command"
     end
 
+    private
+
     def command(_args, _data_store)
       encode_response(type: :simple, value: 'OK')
     end
@@ -34,16 +36,18 @@ class CommandProcessor
     def set(args, data_store)
       key, value, *expiry = args
 
-      unless expiry.empty?
-        unit_type = expiry.first.upcase
-        raise InvalidCommandError, 'Invalid Expiry' unless %w[EX PX].include?(unit_type)
-
-        denom = unit_type == 'PX' ? 1000.0 : 1
-        expiry_seconds = expiry.last.to_i / denom
-      end
+      expiry_seconds = parse_expiry_seconds(expiry) unless expiry.empty?
 
       data_store.set(key, value, expiry_seconds)
       encode_response(type: :simple, value: 'OK')
+    end
+
+    def parse_expiry_seconds(expiry)
+      unit_type = expiry.first.upcase
+      raise InvalidCommandError, 'Invalid Expiry' unless %w[EX PX].include?(unit_type)
+
+      denom = unit_type == 'PX' ? 1000.0 : 1
+      expiry.last.to_i / denom
     end
 
     def get(args, data_store)
