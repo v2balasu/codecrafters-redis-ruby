@@ -30,4 +30,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
   end
 end
 
-YourRedisServer.new(6379).start
+port = 6379
+port = ARGV[1].to_i if ARGV.first == '--port' && !ARGV[1].nil?
+
+YourRedisServer.new(port).start
