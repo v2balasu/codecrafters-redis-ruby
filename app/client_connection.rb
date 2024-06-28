@@ -16,13 +16,12 @@ class ClientConnection
       command, *args = message
 
       begin
-        result = CommandProcessor.execute(command: command, args: args, data_store: @data_store)
-        response = "+#{result}\r\n"
+        response = CommandProcessor.execute(command: command, args: args, data_store: @data_store)
       rescue InvalidCommandError => e
         response = "-#{e.message}\r\n"
       end
 
-      @socket.puts response
+      response.split("\n").each { |w| @socket.puts w }
     end
   end
 end
