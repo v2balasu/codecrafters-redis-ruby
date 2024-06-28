@@ -44,7 +44,7 @@ class CommandProcessor
         unit_type = expiry.first.upcase
         raise InvalidCommandError, 'Invalid Expiry' unless %w[EX PX].include?(unit_type)
 
-        denom = unit_type == 'PX' ? 1000 : 1
+        denom = unit_type == 'PX' ? 1000.0 : 1
         expiry_seconds = expiry.last.to_i / denom
       end
 
