@@ -1,9 +1,11 @@
 require 'socket'
 require_relative './client_connection'
+require_relative './data_store'
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port)
     @port = port
+    @data_store = DataStore.new
   end
 
   def server
@@ -13,7 +15,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def create_connection(socket:)
     # TODO: Pooling and state management
     Thread.new do
-      connection = ClientConnection.new(socket: socket)
+      connection = ClientConnection.new(socket: socket, data_store: @data_store)
       connection.start
     end
   end

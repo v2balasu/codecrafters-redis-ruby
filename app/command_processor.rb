@@ -10,30 +10,33 @@ class CommandProcessor
   ]
 
   class << self
-    def execute(command, args)
-      return send(command.downcase.to_sym, args) if VALID_COMMANDS.include?(command.upcase)
+    def execute(command:, args:, data_store:)
+      return send(command.downcase.to_sym, args, data_store) if VALID_COMMANDS.include?(command.upcase)
 
       raise InvalidCommandError, "#{command} is not a valid command"
     end
 
-    def command(args)
+    def command(_args, _data_store)
       'OK'
     end
 
-    def echo(args)
+    def echo(args, _data_store)
       args.first
     end
 
-    def ping(args)
+    def ping
       'PONG'
     end
 
-    def set(args)
-      'TEST'
+    def set(args, data_store)
+      key, value = *args
+      data_store.set(key, value) unless value.nil?
+      'OK'
     end
 
-    def get(args)
-      'TEST'
+    def get(args, data_store)
+      val = data_store.get(args.first)
+      val.nil? ? '(nil)' : val
     end
   end
 end
