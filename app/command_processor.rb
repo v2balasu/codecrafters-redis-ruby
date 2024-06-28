@@ -1,6 +1,9 @@
+require_relative 'response_encoder'
 class InvalidCommandError < StandardError; end
 
 class CommandProcessor
+  extend ResponseEncoder
+
   VALID_COMMANDS = %w[
     COMMAND
     ECHO
@@ -14,15 +17,6 @@ class CommandProcessor
       return send(command.downcase.to_sym, args, data_store) if VALID_COMMANDS.include?(command.upcase)
 
       raise InvalidCommandError, "#{command} is not a valid command"
-    end
-
-    # TODO: move to other class and properly encode complex types
-    def encode_response(type:, value:)
-      return "$-1\r\n" if value.nil?
-
-      return "+#{value}\r\n" if type == :simple
-
-      "$#{value.length}\r\n#{value}\r\n"
     end
 
     def command(_args, _data_store)

@@ -1,7 +1,10 @@
 require_relative 'message_parser'
 require_relative 'command_processor'
+require_relative 'response_encoder'
 
 class ClientConnection
+  include ResponseEncoder
+
   def initialize(socket:, data_store:)
     @socket = socket
     @data_store = data_store
@@ -18,7 +21,7 @@ class ClientConnection
       begin
         response = CommandProcessor.execute(command: command, args: args, data_store: @data_store)
       rescue InvalidCommandError => e
-        response = "-#{e.message}\r\n"
+        response = encode_response(type: :error, value: e.message)
       end
 
       response.split("\n").each { |w| @socket.puts w }
