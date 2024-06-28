@@ -24,7 +24,7 @@ class CommandProcessor
       args.first
     end
 
-    def ping
+    def ping(_args, _data_store)
       'PONG'
     end
 
