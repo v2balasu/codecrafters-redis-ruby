@@ -27,8 +27,6 @@ class DataStore
         return
       end
 
-      item[:expires_at] = Time.now + item[:expiry_seconds] unless item[:expiry_seconds].nil?
-
       return item[:value]
     end
   end
