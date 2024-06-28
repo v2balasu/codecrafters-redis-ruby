@@ -24,7 +24,7 @@ class RedisClientConnection
     when 'PING'
       "+PONG\r\n"
     when 'ECHO'
-      "+ECHO #{args.first}\r\n"
+      "+#{args.first}\r\n"
     else
       "-Unsupported Command: #{command}\r\n"
     end
