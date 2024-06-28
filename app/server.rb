@@ -1,5 +1,5 @@
 require 'socket'
-require_relative './redis_client_connection'
+require_relative './client_connection'
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port)
@@ -12,16 +12,16 @@ class YourRedisServer # rubocop:disable Style/Documentation
 
   def create_connection(socket:)
     # TODO: Pooling and state management
-    Thread.new do 
-      connection = RedisClientConnection.new(socket: socket)
+    Thread.new do
+      connection = ClientConnection.new(socket: socket)
       connection.start
-    end 
+    end
   end
 
   def start
     loop do
       socket = server.accept
-      next unless socket 
+      next unless socket
 
       create_connection(socket: socket)
     end

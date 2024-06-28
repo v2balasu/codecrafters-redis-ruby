@@ -1,5 +1,5 @@
 class MessageParser
-  AGGREGATE_KEYS = ['*', '$']
+  AGGREGATE_KEYS = ['*', '$'].freeze
 
   class << self
     def parse_message(socket:)
