@@ -15,7 +15,10 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def create_connection(socket:)
     # TODO: Pooling and state management
     Thread.new do
-      connection = ClientConnection.new(socket: socket, data_store: @data_store)
+      connection = ClientConnection.new(
+        socket: socket,
+        command_processor: CommandProcessor.new(data_store: @data_store)
+      )
       connection.start
     end
   end

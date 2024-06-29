@@ -5,9 +5,9 @@ require_relative 'response_encoder'
 class ClientConnection
   include ResponseEncoder
 
-  def initialize(socket:, data_store:)
+  def initialize(socket:, command_processor:)
     @socket = socket
-    @data_store = data_store
+    @command_processor = command_processor
   end
 
   def start
@@ -19,7 +19,7 @@ class ClientConnection
       command, *args = message
 
       begin
-        response = CommandProcessor.execute(command: command, args: args, data_store: @data_store)
+        response = @command_processor.execute(command: command, args: args)
       rescue InvalidCommandError => e
         response = encode_response(type: :error, value: e.message)
       end
