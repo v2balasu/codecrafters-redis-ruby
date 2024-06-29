@@ -6,6 +6,12 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port)
     @port = port
     @data_store = DataStore.new
+    @server_info = {
+      role: 'master'
+      # connected_slaves: 0,
+      # master_replid: 0,
+      # master_repl_offset: 0
+    }
   end
 
   def server
@@ -17,7 +23,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
     Thread.new do
       connection = ClientConnection.new(
         socket: socket,
-        command_processor: CommandProcessor.new(data_store: @data_store)
+        command_processor: CommandProcessor.new(data_store: @data_store, server_info: @server_info)
       )
       connection.start
     end

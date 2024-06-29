@@ -10,10 +10,12 @@ class CommandProcessor
     PING
     SET
     GET
+    INFO
   ]
 
-  def initialize(data_store:)
+  def initialize(data_store:, server_info:)
     @data_store = data_store
+    @server_info = server_info
   end
 
   def execute(command:, args:)
@@ -34,6 +36,11 @@ class CommandProcessor
 
   def ping(_args)
     encode_response(type: :simple, value: 'PONG')
+  end
+
+  def info(_args)
+    str = @server_info.map { |k, v| "#{k}:#{v}\n" }.join
+    encode_response(type: :bulk, value: str)
   end
 
   def set(args)
