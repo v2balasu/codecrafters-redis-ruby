@@ -44,23 +44,31 @@ class YourRedisServer # rubocop:disable Style/Documentation
     end
   end
 
-  def ping_master
-    pp "PINGING #{@master_host}:#{@master_port}"
+  def master_handshake
     socket = TCPSocket.new(@master_host, @master_port)
-    ping_command = encode(type: :array, value: ['PING'])
-    ping_command.split('\r\n').each { |chunk| socket.puts chunk }
 
-    loop do
-      message = MessageParser.parse_message(socket: socket)
-      if message == 'PONG'
-        pp 'PONG Recieved'
-        break
-      end
-    end
+    # TODO: handle timeouts
+    ping_response = send_to_master(socket: socket, data: ['PING'])
+
+    raise 'Replica handshake failed on PING' unless ping_response == 'PONG'
+
+    replica_listen_response = send_to_master(socket: socket, data: ['REPLCONF', 'listening-port', @port.to_s])
+
+    raise 'Replica handshake failed on REPLCONF listening port' unless replica_listen_response == 'OK'
+
+    replica_capa_respoonse = send_to_master(socket: socket, data: %w[REPLCONF capa psync2])
+
+    raise 'Replica handhsake failed on REPLCONF capa' unless replica_capa_respoonse == 'OK'
+  end
+
+  def send_to_master(socket:, data:)
+    ping_command = encode(type: :array, value: data)
+    ping_command.split('\r\n').each { |chunk| socket.puts chunk }
+    MessageParser.parse_message(socket: socket)
   end
 
   def start
-    ping_master unless @master_host.nil?
+    master_handshake unless @master_host.nil?
 
     loop do
       socket = server.accept
