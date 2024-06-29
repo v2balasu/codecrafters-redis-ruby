@@ -47,18 +47,19 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def master_handshake
     socket = TCPSocket.new(@master_host, @master_port)
 
-    # TODO: handle timeouts
-    ping_response = send_to_master(socket: socket, data: ['PING'])
+    ping_resp = send_to_master(socket: socket, data: ['PING'])
+    raise 'Invalid Response' unless ping_resp == 'PONG'
 
-    raise 'Replica handshake failed on PING' unless ping_response == 'PONG'
+    repl_resp = send_to_master(socket: socket, data: ['REPLCONF', 'listening-port', @port.to_s])
+    raise 'Invalid Response' unless repl_resp == 'OK'
 
-    replica_listen_response = send_to_master(socket: socket, data: ['REPLCONF', 'listening-port', @port.to_s])
+    repl_resp = send_to_master(socket: socket, data: %w[REPLCONF capa psync2])
+    raise 'Invalid Response' unless repl_resp == 'OK'
 
-    raise 'Replica handshake failed on REPLCONF listening port' unless replica_listen_response == 'OK'
+    psync_resp = send_to_master(socket: socket, data: %w[PSYNC ? -1])
+    raise 'Invalid Response' unless psync_resp.match(/FULLRESYNC [A-z0-9]+ [0-9]+/)
 
-    replica_capa_respoonse = send_to_master(socket: socket, data: %w[REPLCONF capa psync2])
-
-    raise 'Replica handhsake failed on REPLCONF capa' unless replica_capa_respoonse == 'OK'
+    pp "PSYNC RESPONSE: #{psync_resp}"
   end
 
   def send_to_master(socket:, data:)
