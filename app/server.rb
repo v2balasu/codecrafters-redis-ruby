@@ -1,5 +1,6 @@
 require 'optparse'
 require 'socket'
+require 'securerandom'
 require_relative './client_connection'
 require_relative './data_store'
 
@@ -9,10 +10,14 @@ class YourRedisServer # rubocop:disable Style/Documentation
     @data_store = DataStore.new
     @server_info = {
       role: master_address.nil? ? 'master' : 'slave'
-      # connected_slaves: 0,
-      # master_replid: 0,
-      # master_repl_offset: 0
     }
+
+    return unless @server_info[:role] == 'master'
+
+    @server_info.merge!({
+                          master_replid: SecureRandom.alphanumeric(40),
+                          master_repl_offset: 0
+                        })
   end
 
   def server
