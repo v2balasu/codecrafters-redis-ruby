@@ -1,9 +1,9 @@
 require_relative 'message_parser'
 require_relative 'command_processor'
-require_relative 'response_encoder'
+require_relative 'resp_encoder'
 
 class ClientConnection
-  include ResponseEncoder
+  include RESPEncoder
 
   def initialize(socket:, command_processor:)
     @socket = socket
@@ -21,7 +21,7 @@ class ClientConnection
       begin
         response = @command_processor.execute(command: command, args: args)
       rescue InvalidCommandError => e
-        response = encode_response(type: :error, value: e.message)
+        response = encode(type: :error, value: e.message)
       end
 
       response.split("\n").each { |w| @socket.puts w }

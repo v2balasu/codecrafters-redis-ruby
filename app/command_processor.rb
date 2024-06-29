@@ -1,8 +1,8 @@
-require_relative 'response_encoder'
+require_relative 'resp_encoder'
 class InvalidCommandError < StandardError; end
 
 class CommandProcessor
-  include ResponseEncoder
+  include RESPEncoder
 
   VALID_COMMANDS = %w[
     COMMAND
@@ -27,20 +27,20 @@ class CommandProcessor
   private
 
   def command(_args)
-    encode_response(type: :simple, value: 'OK')
+    encode(type: :simple, value: 'OK')
   end
 
   def echo(args)
-    encode_response(type: :bulk, value: args.first)
+    encode(type: :bulk, value: args.first)
   end
 
   def ping(_args)
-    encode_response(type: :simple, value: 'PONG')
+    encode(type: :simple, value: 'PONG')
   end
 
   def info(_args)
     str = @server_info.map { |k, v| "#{k}:#{v}\n" }.join
-    encode_response(type: :bulk, value: str)
+    encode(type: :bulk, value: str)
   end
 
   def set(args)
@@ -49,7 +49,7 @@ class CommandProcessor
     expiry_seconds = parse_expiry_seconds(expiry) unless expiry.empty?
 
     @data_store.set(key, value, expiry_seconds)
-    encode_response(type: :simple, value: 'OK')
+    encode(type: :simple, value: 'OK')
   end
 
   def parse_expiry_seconds(expiry)
@@ -62,6 +62,6 @@ class CommandProcessor
 
   def get(args)
     val = @data_store.get(args.first)
-    encode_response(type: :bulk, value: val)
+    encode(type: :bulk, value: val)
   end
 end
