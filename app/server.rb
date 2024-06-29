@@ -3,13 +3,22 @@ require 'socket'
 require 'securerandom'
 require_relative './client_connection'
 require_relative './data_store'
+require_relative './resp_encoder'
 
 class YourRedisServer # rubocop:disable Style/Documentation
-  def initialize(port, master_address)
+  include RESPEncoder
+
+  def initialize(port, master_host, master_port)
     @port = port
     @data_store = DataStore.new
+
+    if master_host && master_port
+      @master_host = master_host
+      @master_port = master_port
+    end
+
     @server_info = {
-      role: master_address.nil? ? 'master' : 'slave'
+      role: @master_host.nil? ? 'master' : 'slave'
     }
 
     return unless @server_info[:role] == 'master'
@@ -35,7 +44,24 @@ class YourRedisServer # rubocop:disable Style/Documentation
     end
   end
 
+  def ping_master
+    pp "PINGING #{@master_host}:#{@master_port}"
+    socket = TCPSocket.new(@master_host, @master_port)
+    ping_command = encode(type: :array, value: ['PING'])
+    ping_command.split('\r\n').each { |chunk| socket.puts chunk }
+
+    loop do
+      message = MessageParser.parse_message(socket: socket)
+      if message == 'PONG'
+        pp 'PONG Recieved'
+        break
+      end
+    end
+  end
+
   def start
+    ping_master unless @master_host.nil?
+
     loop do
       socket = server.accept
       next unless socket
@@ -59,6 +85,7 @@ if !master_address.nil? && !master_address.match(/[A-z0-9]+\s[0-9]+/)
   pp 'Invalid replication address'
   exit
 end
+master_host, master_port = master_address.split(' ') unless master_address.nil?
 
 port = options[:port] || 6379
-YourRedisServer.new(port, master_address).start
+YourRedisServer.new(port, master_host, master_port).start
