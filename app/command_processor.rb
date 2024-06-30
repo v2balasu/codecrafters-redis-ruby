@@ -11,6 +11,7 @@ class CommandProcessor
     SET
     GET
     INFO
+    REPLCONF
   ]
 
   def initialize(data_store:, server_info:)
@@ -41,6 +42,10 @@ class CommandProcessor
   def info(_args)
     str = @server_info.map { |k, v| "#{k}:#{v}\n" }.join
     encode(type: :bulk, value: str)
+  end
+
+  def replconf(_args)
+    encode(type: :simple, value: 'OK')
   end
 
   def set(args)
