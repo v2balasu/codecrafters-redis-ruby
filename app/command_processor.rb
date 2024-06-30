@@ -12,6 +12,7 @@ class CommandProcessor
     GET
     INFO
     REPLCONF
+    PSYNC
   ]
 
   def initialize(data_store:, server_info:)
@@ -46,6 +47,16 @@ class CommandProcessor
 
   def replconf(_args)
     encode(type: :simple, value: 'OK')
+  end
+
+  def psync(args)
+    raise InvalidCommandError, 'Node is not a master' unless @server_info[:role] == 'master'
+
+    req_repl_id, req_repl_offset = args
+    raise InvalidCommandError unless req_repl_id == '?' && req_repl_offset == '-1'
+
+    resp = "FULLRESYNC #{@server_info[:master_replid]} #{@server_info[:master_repl_offset]}"
+    encode(type: :simple, value: resp)
   end
 
   def set(args)
