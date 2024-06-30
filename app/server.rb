@@ -29,6 +29,19 @@ class YourRedisServer # rubocop:disable Style/Documentation
                         })
   end
 
+  def start
+    master_handshake unless @master_host.nil?
+
+    loop do
+      socket = server.accept
+      next unless socket
+
+      create_connection(socket: socket)
+    end
+  end
+
+  private
+
   def server
     @server ||= TCPServer.new(@port)
   end
@@ -47,36 +60,23 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def master_handshake
     socket = TCPSocket.new(@master_host, @master_port)
 
-    ping_resp = send_to_master(socket: socket, data: ['PING'])
+    ping_resp = send_command(socket: socket, data: ['PING'])
     raise 'Invalid Response' unless ping_resp == 'PONG'
 
-    repl_resp = send_to_master(socket: socket, data: ['REPLCONF', 'listening-port', @port.to_s])
+    repl_resp = send_command(socket: socket, data: ['REPLCONF', 'listening-port', @port.to_s])
     raise 'Invalid Response' unless repl_resp == 'OK'
 
-    repl_resp = send_to_master(socket: socket, data: %w[REPLCONF capa psync2])
+    repl_resp = send_command(socket: socket, data: %w[REPLCONF capa psync2])
     raise 'Invalid Response' unless repl_resp == 'OK'
 
-    psync_resp = send_to_master(socket: socket, data: %w[PSYNC ? -1])
+    psync_resp = send_command(socket: socket, data: %w[PSYNC ? -1])
     raise 'Invalid Response' unless psync_resp.match(/FULLRESYNC [A-z0-9]+ [0-9]+/)
-
-    pp "PSYNC RESPONSE: #{psync_resp}"
   end
 
-  def send_to_master(socket:, data:)
+  def send_command(socket:, data:)
     ping_command = encode(type: :array, value: data)
     ping_command.split('\r\n').each { |chunk| socket.puts chunk }
     MessageParser.parse_message(socket: socket)
-  end
-
-  def start
-    master_handshake unless @master_host.nil?
-
-    loop do
-      socket = server.accept
-      next unless socket
-
-      create_connection(socket: socket)
-    end
   end
 end
 
