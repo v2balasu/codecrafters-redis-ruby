@@ -13,12 +13,20 @@ class CommandProcessor
     PSYNC
   ]
 
+  VALID_REPLICA_COMMANDS = %w[
+    SET 
+    GET
+    INFO
+  ]
+
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
     @repl_manager = repl_manager
   end
 
   def execute(command:, args:)
+    return nil if @repl_manager.role == 'slave' && !VALID_REPLICA_COMMANDS.include?(command.upcase)
+
     return send(command.downcase.to_sym, args) if VALID_COMMANDS.include?(command.upcase)
 
     raise InvalidCommandError, "#{command} is not a valid command"
@@ -60,12 +68,13 @@ class CommandProcessor
     key, value, *expiry = args
 
     expiry_seconds = parse_expiry_seconds(expiry) unless expiry.empty?
-    
+
     @repl_manager.queue_command('SET', args) if @repl_manager.role == 'master'
 
+    pp "WRITING #{key} #{value}"
     @data_store.set(key, value, expiry_seconds)
 
-    RESPData.new(type: :simple, value: 'OK')
+    @repl_manager.role == 'slave' ? nil : RESPData.new(type: :simple, value: 'OK')
   end
 
   def parse_expiry_seconds(expiry)

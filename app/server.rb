@@ -17,13 +17,29 @@ class YourRedisServer # rubocop:disable Style/Documentation
   end
 
   def start
-    master_handshake unless @repl_manager.role == 'master'
+    @repl_manager.role == 'master' ? start_as_master : start_as_replica
+  end
+
+  private
+
+  def start_as_master
     client_listener = Thread.new { process_client_connections }
     Thread.new { broadcast_to_replicas }
     client_listener.join
   end
 
-  private
+  def start_as_replica
+    master_socket = TCPSocket.new(@master_host, @master_port)
+    @repl_manager.master_handshake(socket: master_socket, port: @port)
+    master_connection = ClientConnection.new(socket: master_socket,
+                                             command_processor: CommandProcessor.new(data_store: @data_store,
+                                                                                     repl_manager: @repl_manager))
+    master_listener = Thread.new { master_connection.start }
+    connection_litener = Thread.new { process_client_connections }
+
+    master_listener.join
+    connection_litener.join
+  end
 
   def server
     @server ||= TCPServer.new(@port)
@@ -54,37 +70,8 @@ class YourRedisServer # rubocop:disable Style/Documentation
       )
       status = connection.start
 
-      if status == :upgrade_to_replica
-        pp 'Upgrading connection to replica'
-        rdb_content = @data_store.to_rdb.bytes
-        socket.puts "$#{rdb_content.length}\r"
-        socket.write rdb_content.pack('C*')
-
-        @repl_manager.add_connection(socket: socket)
-      end
+      @repl_manager.add_connection(socket: socket, data_store: @data_store) if status == :upgrade_to_replica
     end
-  end
-
-  def master_handshake
-    socket = TCPSocket.new(@master_host, @master_port)
-
-    ping_resp = send_command(socket: socket, data: ['PING'])
-    raise 'Invalid Response' unless ping_resp == 'PONG'
-
-    repl_resp = send_command(socket: socket, data: ['REPLCONF', 'listening-port', @port.to_s])
-    raise 'Invalid Response' unless repl_resp == 'OK'
-
-    repl_resp = send_command(socket: socket, data: %w[REPLCONF capa psync2])
-    raise 'Invalid Response' unless repl_resp == 'OK'
-
-    psync_resp = send_command(socket: socket, data: %w[PSYNC ? -1])
-    raise 'Invalid Response' unless psync_resp.match(/FULLRESYNC [A-z0-9]+ [0-9]+/)
-  end
-
-  def send_command(socket:, data:)
-    ping_command = RESPData.new(type: :array, value: data).encode
-    ping_command.split('\r\n').each { |chunk| socket.puts chunk }
-    MessageParser.parse_message(socket: socket)
   end
 end
 

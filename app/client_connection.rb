@@ -22,7 +22,7 @@ class ClientConnection
         response = encode(type: :error, value: e.message)
       end
 
-      response.encode.split('\n').each { |chunk| @socket.puts(chunk) }
+      response&.encode&.split('\n')&.each { |chunk| @socket.puts(chunk) }
 
       return :upgrade_to_replica if command.upcase == 'PSYNC'
     end

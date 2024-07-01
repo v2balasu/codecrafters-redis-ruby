@@ -1,7 +1,9 @@
 require 'securerandom'
+require_relative 'message_parser'
+require_relative 'resp_data'
 
 class ReplicationManager
-  attr_reader :role, :master_replid, :master_repl_offset
+  attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete
 
   def initialize(role)
     @mutex = Thread::Mutex.new
@@ -21,8 +23,35 @@ class ReplicationManager
       .map { |k, v| "#{k}:#{v}\n" }.join
   end
 
-  def add_connection(socket:)
-    pp 'Adding replica'
+  def master_handshake(socket:, port:)
+    ping_resp = send_command(socket: socket, data: ['PING'])
+    raise 'Invalid Response' unless ping_resp == 'PONG'
+
+    repl_resp = send_command(socket: socket, data: ['REPLCONF', 'listening-port', port.to_s])
+    raise 'Invalid Response' unless repl_resp == 'OK'
+
+    repl_resp = send_command(socket: socket, data: %w[REPLCONF capa psync2])
+    raise 'Invalid Response' unless repl_resp == 'OK'
+
+    psync_resp = send_command(socket: socket, data: %w[PSYNC ? -1])
+    raise 'Invalid Response' unless psync_resp.match(/FULLRESYNC [A-z0-9]+ [0-9]+/)
+
+    rdp_length = socket.gets&.chomp&.[](1..).to_i
+    rdp_resp = socket.read(rdp_length)
+    pp "RDB Recivied: #{rdp_resp}"
+  end
+
+  def send_command(socket:, data:)
+    send_command = RESPData.new(type: :array, value: data).encode
+    send_command.split('\r\n').each { |chunk| socket.puts chunk }
+    MessageParser.parse_message(socket: socket)
+  end
+
+  def add_connection(socket:, data_store:)
+    pp 'Upgrading connection to replica'
+    rdb_content = data_store.to_rdb.bytes
+    socket.puts "$#{rdb_content.length}\r"
+    socket.write rdb_content.pack('C*')
     @mutex.synchronize { @replica_connections << socket }
   end
 

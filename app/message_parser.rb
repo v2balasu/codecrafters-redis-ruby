@@ -9,8 +9,7 @@ class MessageParser
 
       aggregate_stack = [root]
 
-      while aggregate_stack.length > 0
-        chunk = socket.gets&.chomp
+      while aggregate_stack.length > 0 && chunk = socket.gets&.chomp
         current = aggregate_stack.last
 
         value = if current.value.is_a?(Array)
@@ -25,11 +24,14 @@ class MessageParser
         aggregate_stack.push(value) if value.is_a?(Aggregate)
       end
 
+      return nil unless aggregate_stack.length == 0
       process_aggregate_values(root)
     end
 
     def parse_chunk(chunk)
       return nil unless chunk
+
+      pp "recieived #{chunk}"
 
       if AGGREGATE_KEYS.include?(chunk[0])
         parse_aggregate(chunk)
