@@ -24,7 +24,24 @@ class ClientConnection
         response = encode(type: :error, value: e.message)
       end
 
-      response.split("\n").each { |w| @socket.puts w }
+      if response.is_a?(Array)
+        response.each { |r| transmit_response(r) }
+      else
+        transmit_response(response)
+      end
     end
+  end
+
+  private
+
+  def transmit_response(response)
+    return transmit_resp_response(response) unless response.is_a?(Array)
+
+    @socket.puts "$#{response.length}\r"
+    @socket.write response.pack('C*')
+  end
+
+  def transmit_resp_response(response)
+    response.split("\n").each { |w| @socket.puts w }
   end
 end

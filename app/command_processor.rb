@@ -55,8 +55,11 @@ class CommandProcessor
     req_repl_id, req_repl_offset = args
     raise InvalidCommandError unless req_repl_id == '?' && req_repl_offset == '-1'
 
-    resp = "FULLRESYNC #{@server_info[:master_replid]} #{@server_info[:master_repl_offset]}"
-    encode(type: :simple, value: resp)
+    full_resync_resp = "FULLRESYNC #{@server_info[:master_replid]} #{@server_info[:master_repl_offset]}"
+    [
+      encode(type: :simple, value: full_resync_resp),
+      @data_store.to_rdb_bytes
+    ]
   end
 
   def set(args)
