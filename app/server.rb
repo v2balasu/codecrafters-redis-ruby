@@ -3,11 +3,9 @@ require 'socket'
 require 'securerandom'
 require_relative './client_connection'
 require_relative './data_store'
-require_relative './resp_encoder'
+require_relative './resp_data'
 
 class YourRedisServer # rubocop:disable Style/Documentation
-  include RESPEncoder
-
   def initialize(port, master_host, master_port)
     @port = port
     @data_store = DataStore.new
@@ -74,7 +72,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
   end
 
   def send_command(socket:, data:)
-    ping_command = encode(type: :array, value: data)
+    ping_command = RESPData.new(type: :array, value: data).encode
     ping_command.split('\r\n').each { |chunk| socket.puts chunk }
     MessageParser.parse_message(socket: socket)
   end

@@ -1,9 +1,7 @@
-require_relative 'resp_encoder'
+require_relative 'resp_data'
 class InvalidCommandError < StandardError; end
 
 class CommandProcessor
-  include RESPEncoder
-
   VALID_COMMANDS = %w[
     COMMAND
     ECHO
@@ -29,24 +27,24 @@ class CommandProcessor
   private
 
   def command(_args)
-    encode(type: :simple, value: 'OK')
+    RESPData.new(type: :simple, value: 'OK')
   end
 
   def echo(args)
-    encode(type: :bulk, value: args.first)
+    RESPData.new(type: :bulk, value: args.first)
   end
 
   def ping(_args)
-    encode(type: :simple, value: 'PONG')
+    RESPData.new(type: :simple, value: 'PONG')
   end
 
   def info(_args)
     str = @server_info.map { |k, v| "#{k}:#{v}\n" }.join
-    encode(type: :bulk, value: str)
+    RESPData.new(type: :bulk, value: str)
   end
 
   def replconf(_args)
-    encode(type: :simple, value: 'OK')
+    RESPData.new(type: :simple, value: 'OK')
   end
 
   def psync(args)
@@ -57,8 +55,8 @@ class CommandProcessor
 
     full_resync_resp = "FULLRESYNC #{@server_info[:master_replid]} #{@server_info[:master_repl_offset]}"
     [
-      encode(type: :simple, value: full_resync_resp),
-      @data_store.to_rdb_bytes
+      RESPData.new(type: :simple, value: full_resync_resp),
+      @data_store.to_rdb
     ]
   end
 
@@ -68,7 +66,7 @@ class CommandProcessor
     expiry_seconds = parse_expiry_seconds(expiry) unless expiry.empty?
 
     @data_store.set(key, value, expiry_seconds)
-    encode(type: :simple, value: 'OK')
+    RESPData.new(type: :simple, value: 'OK')
   end
 
   def parse_expiry_seconds(expiry)
@@ -81,6 +79,6 @@ class CommandProcessor
 
   def get(args)
     val = @data_store.get(args.first)
-    encode(type: :bulk, value: val)
+    RESPData.new(type: :bulk, value: val)
   end
 end

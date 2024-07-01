@@ -33,10 +33,10 @@ class DataStore
     end
   end
 
-  def to_rdb_bytes
+  def to_rdb
     # TODO: Hardcoding a empty DB for now, serialzie to full RDB later
     Base64.decode64(
       'UkVESVMwMDEx+glyZWRpcy13ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=='
-    ).bytes
+    )
   end
 end

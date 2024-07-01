@@ -1,10 +1,8 @@
 require_relative 'message_parser'
 require_relative 'command_processor'
-require_relative 'resp_encoder'
+require_relative 'resp_data'
 
 class ClientConnection
-  include RESPEncoder
-
   def initialize(socket:, command_processor:)
     @socket = socket
     @command_processor = command_processor
@@ -35,10 +33,10 @@ class ClientConnection
   private
 
   def transmit_response(response)
-    return transmit_resp_response(response) unless response.is_a?(Array)
+    return transmit_resp_response(response.encode) if response.is_a?(RESPData)
 
-    @socket.puts "$#{response.length}\r"
-    @socket.write response.pack('C*')
+    @socket.puts "$#{response.bytes.length}\r"
+    @socket.write response.bytes.pack('C*')
   end
 
   def transmit_resp_response(response)
