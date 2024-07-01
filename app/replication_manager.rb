@@ -1,6 +1,6 @@
 require 'securerandom'
 
-class ServerInfo
+class ReplicationManager
   attr_reader :role, :master_replid, :master_repl_offset
 
   def initialize(role)
@@ -21,12 +21,12 @@ class ServerInfo
       .map { |k, v| "#{k}:#{v}\n" }.join
   end
 
-  def add_repica_connection(socket:)
+  def add_connection(socket:)
     pp 'Adding replica'
     @mutex.synchronize { @replica_connections << socket }
   end
 
-  def queue_replica_command(command, args)
+  def queue_command(command, args)
     @mutex.synchronize do
       return unless @replica_connections.length > 0
 
@@ -35,7 +35,7 @@ class ServerInfo
     end
   end
 
-  def broadcast_to_replicas
+  def broadcast
     return unless @replica_connections.length > 0 && @replica_commands.length > 0
 
     @mutex.synchronize do

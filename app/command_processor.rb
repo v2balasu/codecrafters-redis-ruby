@@ -13,9 +13,9 @@ class CommandProcessor
     PSYNC
   ]
 
-  def initialize(data_store:, server_info:)
+  def initialize(data_store:, repl_manager:)
     @data_store = data_store
-    @server_info = server_info
+    @repl_manager = repl_manager
   end
 
   def execute(command:, args:)
@@ -39,7 +39,7 @@ class CommandProcessor
   end
 
   def info(_args)
-    RESPData.new(type: :bulk, value: @server_info.serialize)
+    RESPData.new(type: :bulk, value: @repl_manager.serialize)
   end
 
   def replconf(_args)
@@ -47,12 +47,12 @@ class CommandProcessor
   end
 
   def psync(args)
-    raise InvalidCommandError, 'Node is not a master' unless @server_info.role == 'master'
+    raise InvalidCommandError, 'Node is not a master' unless @repl_manager.role == 'master'
 
     req_repl_id, req_repl_offset = args
     raise InvalidCommandError unless req_repl_id == '?' && req_repl_offset == '-1'
 
-    full_resync_resp = "FULLRESYNC #{@server_info.master_replid} #{@server_info.master_repl_offset}"
+    full_resync_resp = "FULLRESYNC #{@repl_manager.master_replid} #{@repl_manager.master_repl_offset}"
     RESPData.new(type: :simple, value: full_resync_resp)
   end
 
@@ -61,7 +61,7 @@ class CommandProcessor
 
     expiry_seconds = parse_expiry_seconds(expiry) unless expiry.empty?
     
-    @server_info.queue_replica_command('SET', args) if @server_info.role == 'master'
+    @repl_manager.queue_command('SET', args) if @repl_manager.role == 'master'
 
     @data_store.set(key, value, expiry_seconds)
 

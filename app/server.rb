@@ -3,7 +3,7 @@ require 'socket'
 require_relative './client_connection'
 require_relative './data_store'
 require_relative './resp_data'
-require_relative './server_info'
+require_relative './replication_manager'
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port, master_host, master_port)
@@ -13,11 +13,11 @@ class YourRedisServer # rubocop:disable Style/Documentation
     @master_port = master_port
 
     role = master_host.nil? ? 'master' : 'slave'
-    @server_info = ServerInfo.new(role)
+    @repl_manager = ReplicationManager.new(role)
   end
 
   def start
-    master_handshake unless @server_info.role == 'master'
+    master_handshake unless @repl_manager.role == 'master'
     client_listener = Thread.new { process_client_connections }
     Thread.new { broadcast_to_replicas }
     client_listener.join
@@ -40,7 +40,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
 
   def broadcast_to_replicas
     loop do
-      @server_info.broadcast_to_replicas
+      @repl_manager.broadcast
       sleep(0.1)
     end
   end
@@ -50,7 +50,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
     Thread.new do
       connection = ClientConnection.new(
         socket: socket,
-        command_processor: CommandProcessor.new(data_store: @data_store, server_info: @server_info)
+        command_processor: CommandProcessor.new(data_store: @data_store, repl_manager: @repl_manager)
       )
       status = connection.start
 
@@ -60,7 +60,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
         socket.puts "$#{rdb_content.length}\r"
         socket.write rdb_content.pack('C*')
 
-        @server_info.add_repica_connection(socket: socket)
+        @repl_manager.add_connection(socket: socket)
       end
     end
   end
