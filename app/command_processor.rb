@@ -39,8 +39,7 @@ class CommandProcessor
   end
 
   def info(_args)
-    str = @server_info.map { |k, v| "#{k}:#{v}\n" }.join
-    RESPData.new(type: :bulk, value: str)
+    RESPData.new(type: :bulk, value: @server_info.serialize)
   end
 
   def replconf(_args)

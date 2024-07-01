@@ -1,30 +1,15 @@
 require 'optparse'
 require 'socket'
-require 'securerandom'
 require_relative './client_connection'
 require_relative './data_store'
 require_relative './resp_data'
+require_relative './server_info'
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port, master_host, master_port)
     @port = port
     @data_store = DataStore.new
-
-    if master_host && master_port
-      @master_host = master_host
-      @master_port = master_port
-    end
-
-    @server_info = {
-      role: @master_host.nil? ? 'master' : 'slave'
-    }
-
-    return unless @server_info[:role] == 'master'
-
-    @server_info.merge!({
-                          master_replid: SecureRandom.alphanumeric(40),
-                          master_repl_offset: 0
-                        })
+    @server_info = ServerInfo.new(master_host, master_port)
   end
 
   def start
