@@ -47,24 +47,24 @@ class CommandProcessor
   end
 
   def psync(args)
-    raise InvalidCommandError, 'Node is not a master' unless @server_info[:role] == 'master'
+    raise InvalidCommandError, 'Node is not a master' unless @server_info.role == 'master'
 
     req_repl_id, req_repl_offset = args
     raise InvalidCommandError unless req_repl_id == '?' && req_repl_offset == '-1'
 
-    full_resync_resp = "FULLRESYNC #{@server_info[:master_replid]} #{@server_info[:master_repl_offset]}"
-    [
-      RESPData.new(type: :simple, value: full_resync_resp),
-      @data_store.to_rdb
-    ]
+    full_resync_resp = "FULLRESYNC #{@server_info.master_replid} #{@server_info.master_repl_offset}"
+    RESPData.new(type: :simple, value: full_resync_resp)
   end
 
   def set(args)
     key, value, *expiry = args
 
     expiry_seconds = parse_expiry_seconds(expiry) unless expiry.empty?
+    
+    @server_info.queue_replica_command('SET', args) if @server_info.role == 'master'
 
     @data_store.set(key, value, expiry_seconds)
+
     RESPData.new(type: :simple, value: 'OK')
   end
 

@@ -9,12 +9,27 @@ class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port, master_host, master_port)
     @port = port
     @data_store = DataStore.new
-    @server_info = ServerInfo.new(master_host, master_port)
+    @master_host = master_host
+    @master_port = master_port
+
+    role = master_host.nil? ? 'master' : 'slave'
+    @server_info = ServerInfo.new(role)
   end
 
   def start
-    master_handshake unless @master_host.nil?
+    master_handshake unless @server_info.role == 'master'
+    client_listener = Thread.new { process_client_connections }
+    Thread.new { broadcast_to_replicas }
+    client_listener.join
+  end
 
+  private
+
+  def server
+    @server ||= TCPServer.new(@port)
+  end
+
+  def process_client_connections
     loop do
       socket = server.accept
       next unless socket
@@ -23,10 +38,11 @@ class YourRedisServer # rubocop:disable Style/Documentation
     end
   end
 
-  private
-
-  def server
-    @server ||= TCPServer.new(@port)
+  def broadcast_to_replicas
+    loop do
+      @server_info.broadcast_to_replicas
+      sleep(0.1)
+    end
   end
 
   def create_connection(socket:)
@@ -36,7 +52,16 @@ class YourRedisServer # rubocop:disable Style/Documentation
         socket: socket,
         command_processor: CommandProcessor.new(data_store: @data_store, server_info: @server_info)
       )
-      connection.start
+      status = connection.start
+
+      if status == :upgrade_to_replica
+        pp 'Upgrading connection to replica'
+        rdb_content = @data_store.to_rdb.bytes
+        socket.puts "$#{rdb_content.length}\r"
+        socket.write rdb_content.pack('C*')
+
+        @server_info.add_repica_connection(socket: socket)
+      end
     end
   end
 
