@@ -38,7 +38,6 @@ class ReplicationManager
 
     rdp_length = socket.gets&.chomp&.[](1..).to_i
     rdp_resp = socket.read(rdp_length)
-    pp "RDB Recivied: #{rdp_resp}"
   end
 
   def send_command(socket:, data:)
@@ -48,7 +47,6 @@ class ReplicationManager
   end
 
   def add_connection(socket:, data_store:)
-    pp 'Upgrading connection to replica'
     rdb_content = data_store.to_rdb.bytes
     socket.puts "$#{rdb_content.length}\r"
     socket.write rdb_content.pack('C*')
@@ -74,7 +72,6 @@ class ReplicationManager
         @replica_connections.each do |connection|
           command.split('\n').each { |chunk| connection.puts chunk }
         rescue StandardError => e
-          pp "Unable to send to replica #{e.message}"
           unhealthy_connections << connection
         end
       end

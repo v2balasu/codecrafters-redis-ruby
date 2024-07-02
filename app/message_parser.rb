@@ -31,8 +31,6 @@ class MessageParser
     def parse_chunk(chunk)
       return nil unless chunk
 
-      pp "recieived #{chunk}"
-
       if AGGREGATE_KEYS.include?(chunk[0])
         parse_aggregate(chunk)
       else

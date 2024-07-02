@@ -71,7 +71,6 @@ class CommandProcessor
 
     @repl_manager.queue_command('SET', args) if @repl_manager.role == 'master'
 
-    pp "WRITING #{key} #{value}"
     @data_store.set(key, value, expiry_seconds)
 
     @repl_manager.role == 'slave' ? nil : RESPData.new(type: :simple, value: 'OK')
