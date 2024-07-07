@@ -17,6 +17,7 @@ class CommandProcessor
     SET 
     GET
     INFO
+    REPLCONF
   ]
 
   def initialize(data_store:, repl_manager:)
@@ -50,8 +51,12 @@ class CommandProcessor
     RESPData.new(type: :bulk, value: @repl_manager.serialize)
   end
 
-  def replconf(_args)
-    RESPData.new(type: :simple, value: 'OK')
+  def replconf(args) 
+    if @repl_manager.role == 'slave' && (args&.first == 'GETACK' && args&.last == '*')
+      return RESPData.new(type: :array, value: ['REPLCONF', 'ACK', '0'])
+    end
+
+    return RESPData.new(type: :simple, value: 'OK') 
   end
 
   def psync(args)

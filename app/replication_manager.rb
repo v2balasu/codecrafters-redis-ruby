@@ -71,7 +71,7 @@ class ReplicationManager
       while command = @replica_commands.shift
         @replica_connections.each do |connection|
           command.split('\n').each { |chunk| connection.puts chunk }
-        rescue StandardError => e
+        rescue StandardError 
           unhealthy_connections << connection
         end
       end
