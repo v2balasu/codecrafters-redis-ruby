@@ -17,6 +17,7 @@ class CommandProcessor
     SET 
     GET
     INFO
+    PING
     REPLCONF
   ]
 
@@ -49,7 +50,7 @@ class CommandProcessor
   end
 
   def ping(_args)
-    RESPData.new(type: :simple, value: 'PONG')
+    @repl_manager.role == 'slave' ? nil : RESPData.new(type: :simple, value: 'PONG')
   end
 
   def info(_args)
