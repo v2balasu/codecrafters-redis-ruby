@@ -26,7 +26,7 @@ class ReplicationManager
     MessageParser.parse_message(socket: socket)
   end
   
-  attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete
+  attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete, :replica_offset
 
   def initialize(role)
     @mutex = Thread::Mutex.new
@@ -35,6 +35,7 @@ class ReplicationManager
     @role = role
     @master_replid = SecureRandom.alphanumeric(40) if @role == 'master'
     @master_repl_offset = 0 if @role == 'master'
+    @replica_offset = 0
   end
 
   def serialize
@@ -44,6 +45,17 @@ class ReplicationManager
       master_repl_offset: @master_repl_offset
     }.compact
       .map { |k, v| "#{k}:#{v}\n" }.join
+  end
+
+  def increment_replica_offset(command:, args:)
+    return unless @role == 'slave'
+
+    bytes_processed = RESPData.new(type: :array, value: [command, args].flatten)
+      .encode
+      .bytes
+      .length 
+    
+    @replica_offset += bytes_processed
   end
 
   def add_connection(socket:, data_store:)

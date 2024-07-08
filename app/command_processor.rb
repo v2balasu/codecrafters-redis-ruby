@@ -27,8 +27,13 @@ class CommandProcessor
 
   def execute(command:, args:)
     return nil if @repl_manager.role == 'slave' && !VALID_REPLICA_COMMANDS.include?(command.upcase)
+    
+    if VALID_COMMANDS.include?(command.upcase)
+      result = send(command.downcase.to_sym, args) 
+      @repl_manager.increment_replica_offset(command: command, args: args)
+      return result
+    end
 
-    return send(command.downcase.to_sym, args) if VALID_COMMANDS.include?(command.upcase)
 
     raise InvalidCommandError, "#{command} is not a valid command"
   end
@@ -53,7 +58,7 @@ class CommandProcessor
 
   def replconf(args) 
     if @repl_manager.role == 'slave' && (args&.first == 'GETACK' && args&.last == '*')
-      return RESPData.new(type: :array, value: ['REPLCONF', 'ACK', '0'])
+      return RESPData.new(type: :array, value: ['REPLCONF', 'ACK', @repl_manager.replica_offset.to_s])
     end
 
     return RESPData.new(type: :simple, value: 'OK') 
