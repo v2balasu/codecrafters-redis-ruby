@@ -77,7 +77,7 @@ class CommandProcessor
   end
 
   def wait(args)
-    RESPData.new(type: :integer, value: 0)
+    RESPData.new(type: :integer, value: @repl_manager.replica_count)
   end
 
   def set(args)

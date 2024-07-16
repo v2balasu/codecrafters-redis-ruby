@@ -65,6 +65,10 @@ class ReplicationManager
     @mutex.synchronize { @replica_connections << socket }
   end
 
+  def replica_count
+    @mutex.synchronize { @replica_connections.count }
+  end
+
   def queue_command(command, args)
     @mutex.synchronize do
       return unless @replica_connections.length > 0
