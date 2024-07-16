@@ -11,6 +11,7 @@ class CommandProcessor
     INFO
     REPLCONF
     PSYNC
+    WAIT
   ]
 
   VALID_REPLICA_COMMANDS = %w[
@@ -73,6 +74,10 @@ class CommandProcessor
 
     full_resync_resp = "FULLRESYNC #{@repl_manager.master_replid} #{@repl_manager.master_repl_offset}"
     RESPData.new(type: :simple, value: full_resync_resp)
+  end
+
+  def wait(args)
+    RESPData.new(type: :integer, value: 0)
   end
 
   def set(args)

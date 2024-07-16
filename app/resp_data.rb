@@ -1,5 +1,5 @@
 class RESPData
-  VALID_TYPES = %i[nil simple bulk error array].freeze
+  VALID_TYPES = %i[nil simple bulk error array integer].freeze
 
   def initialize(type:, value:)
     @type = type
@@ -9,6 +9,7 @@ class RESPData
     raise "Invalid Value for type #{type}" if @type == :simple && !@value.is_a?(String)
     raise 'Value must be nil for type nil' if @type == :nil && !@value.nil?
     raise 'Value must be array for type array' if @type == :array && !@value.is_a?(Array)
+    raise 'Value must be integer for type integer' if @type == :integer && !@value.is_a?(Integer)
   end
 
   def encode
@@ -21,6 +22,8 @@ class RESPData
   def encode_data(type:, value:)
     return "$-1\r\n" if value.nil?
 
+    return ":#{value}\r\n" if type == :integer 
+    
     return "-#{value}\r\n" if type == :error
 
     return "+#{value}\r\n" if type == :simple
