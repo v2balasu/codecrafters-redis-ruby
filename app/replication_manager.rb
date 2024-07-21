@@ -1,6 +1,7 @@
 require 'securerandom'
 require_relative 'message_parser'
 require_relative 'resp_data'
+require 'set'
 
 class ReplicationManager
   CLIENT_ACK = RESPData.new(type: :array, value: ['REPLCONF', 'GETACK', '*']).encode
@@ -28,11 +29,11 @@ class ReplicationManager
     MessageParser.parse_message(socket: socket)
   end
 
-  attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete, :replica_offset
+  attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete,
+              :replica_offset, :rdb_dir, :rdb_fname
 
-  def initialize(role)
+  def initialize(role, rdb_dir, rdb_fname)
     @mutex = Thread::Mutex.new
-    @command_mutex = Thread::Mutex.new
     @replica_connections = []
     @replica_commands = []
     @role = role
@@ -41,6 +42,8 @@ class ReplicationManager
     @replica_offset = 0
     @clients_broadcasted = Set.new
     @replicas_acked = {}
+    @rdb_dir = rdb_dir
+    @rdb_fname = rdb_fname
   end
 
   def serialize
@@ -90,8 +93,8 @@ class ReplicationManager
 
       @replicas_acked[client_id] = 0
 
-      unhealthy_connections = [] 
-      
+      unhealthy_connections = []
+
       @replica_connections.each do |connection|
         CLIENT_ACK.split('\n').each { |chunk| connection.puts chunk }
         MessageParser.parse_message(socket: connection, timeout: 0.1)
@@ -101,7 +104,7 @@ class ReplicationManager
       end
 
       @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
-      
+
       @clients_broadcasted.delete(client_id)
     end
   end
@@ -120,7 +123,7 @@ class ReplicationManager
         @replica_connections.each do |connection|
           command.split('\n').each { |chunk| connection.puts chunk }
         rescue StandardError
-          unhealthy_connections << connection 
+          unhealthy_connections << connection
         end
       end
 

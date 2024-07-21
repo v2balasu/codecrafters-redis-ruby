@@ -6,14 +6,14 @@ require_relative './resp_data'
 require_relative './replication_manager'
 
 class YourRedisServer # rubocop:disable Style/Documentation
-  def initialize(port, master_host, master_port)
+  def initialize(port, master_host, master_port, rdb_dir, rdb_fname)
     @port = port
     @data_store = DataStore.new
     @master_host = master_host
     @master_port = master_port
 
     role = master_host.nil? ? 'master' : 'slave'
-    @repl_manager = ReplicationManager.new(role)
+    @repl_manager = ReplicationManager.new(role, rdb_dir, rdb_fname)
   end
 
   def start
@@ -84,6 +84,12 @@ OptionParser.new do |parser|
   parser.on('--replicaof <MASTER_HOST>_<MASTER_PORT>', String, 'Specify the port number') do |address|
     options[:master_address] = address
   end
+  parser.on('--dir DIR', String, 'The path to the directory containg the rdb file') do |dir|
+    options[:rdb_dir] = dir
+  end
+  parser.on('--dbfilename FILENAME', String, 'the name of the RDB file') do |db_fname|
+    options[:rdb_fname] = db_fname
+  end
 end.parse!
 
 master_address = options[:master_address]
@@ -94,4 +100,8 @@ end
 master_host, master_port = master_address.split(' ') unless master_address.nil?
 
 port = options[:port] || 6379
-YourRedisServer.new(port, master_host, master_port).start
+
+rdb_dir = options[:rdb_dir]
+rdb_fname = options[:rdb_fname]
+
+YourRedisServer.new(port, master_host, master_port, rdb_dir, rdb_fname).start
