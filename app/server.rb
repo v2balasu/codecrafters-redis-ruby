@@ -30,7 +30,7 @@ class YourRedisServer # rubocop:disable Style/Documentation
 
   def start_as_replica
     master_socket = TCPSocket.new(@master_host, @master_port)
-     
+
     ReplicationManager.complete_master_handshake(socket: master_socket, port: @port)
 
     master_connection = ClientConnection.new(socket: master_socket,

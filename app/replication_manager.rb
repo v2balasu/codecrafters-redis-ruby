@@ -3,6 +3,8 @@ require_relative 'message_parser'
 require_relative 'resp_data'
 
 class ReplicationManager
+  CLIENT_ACK = RESPData.new(type: :array, value: ['REPLCONF', 'GETACK', '*']).encode
+
   def self.complete_master_handshake(socket:, port:)
     ping_resp = send_handshake_command(socket: socket, data: ['PING'])
     raise 'Invalid Response' unless ping_resp == 'PONG'
@@ -25,17 +27,20 @@ class ReplicationManager
     send_handshake_command.split('\r\n').each { |chunk| socket.puts chunk }
     MessageParser.parse_message(socket: socket)
   end
-  
+
   attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete, :replica_offset
 
   def initialize(role)
     @mutex = Thread::Mutex.new
+    @command_mutex = Thread::Mutex.new
     @replica_connections = []
     @replica_commands = []
     @role = role
     @master_replid = SecureRandom.alphanumeric(40) if @role == 'master'
     @master_repl_offset = 0 if @role == 'master'
     @replica_offset = 0
+    @clients_broadcasted = Set.new
+    @replicas_acked = {}
   end
 
   def serialize
@@ -51,10 +56,10 @@ class ReplicationManager
     return unless @role == 'slave'
 
     bytes_processed = RESPData.new(type: :array, value: [command, args].flatten)
-      .encode
-      .bytes
-      .length 
-    
+                              .encode
+                              .bytes
+                              .length
+
     @replica_offset += bytes_processed
   end
 
@@ -69,30 +74,57 @@ class ReplicationManager
     @mutex.synchronize { @replica_connections.count }
   end
 
-  def queue_command(command, args)
+  def queue_command(command, args, client_id)
     @mutex.synchronize do
-      return unless @replica_connections.length > 0
-
       resp_command = RESPData.new(type: :array, value: [command, args].flatten)
-      @replica_commands << resp_command.encode
+      @replica_commands << [client_id, resp_command.encode]
     end
   end
 
-  def broadcast
-    return unless @replica_connections.length > 0 && @replica_commands.length > 0
+  def ack_replicas(client_id:)
+    @mutex.synchronize do
+      unless @clients_broadcasted.include?(client_id)
+        @replicas_acked[client_id] = nil
+        return
+      end
 
+      @replicas_acked[client_id] = 0
+
+      unhealthy_connections = [] 
+      
+      @replica_connections.each do |connection|
+        CLIENT_ACK.split('\n').each { |chunk| connection.puts chunk }
+        MessageParser.parse_message(socket: connection, timeout: 0.1)
+        @replicas_acked[client_id] += 1
+      rescue StandardError => e
+        unhealthy_connections << connection unless e.is_a?(MessageParseTimeoutError)
+      end
+
+      @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
+      
+      @clients_broadcasted.delete(client_id)
+    end
+  end
+
+  def replicas_acked(client_id:)
+    @replicas_acked[client_id]
+  end
+
+  def broadcast
     @mutex.synchronize do
       unhealthy_connections = []
 
-      while command = @replica_commands.shift
+      while (client_id, command = @replica_commands.shift)
+        @clients_broadcasted.add(client_id)
+
         @replica_connections.each do |connection|
           command.split('\n').each { |chunk| connection.puts chunk }
-        rescue StandardError 
-          unhealthy_connections << connection
+        rescue StandardError
+          unhealthy_connections << connection 
         end
       end
 
-      unhealthy_connections.each { |c| @replica_connections.remove(c) }
+      @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
     end
   end
 end

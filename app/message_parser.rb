@@ -1,8 +1,12 @@
+class MessageParseTimeoutError < StandardError; end
+
 class MessageParser
   AGGREGATE_KEYS = ['*', '$'].freeze
 
   class << self
-    def parse_message(socket:)
+    def parse_message(socket:, timeout: 5)
+      raise MessageParseTimeoutError unless IO.select([socket], nil, nil, timeout)
+
       chunk = socket.gets&.chomp
       root = parse_chunk(chunk)
       return root unless root.is_a?(Aggregate)
