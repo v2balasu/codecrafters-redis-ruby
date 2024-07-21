@@ -14,7 +14,8 @@ class CommandProcessor
     REPLCONF
     PSYNC
     WAIT
-  ]
+    CONFIG
+  ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
     SET
@@ -22,7 +23,9 @@ class CommandProcessor
     INFO
     PING
     REPLCONF
-  ]
+  ].freeze
+
+  VALID_CONFIG_KEYS = %w[dir dbfilename].freeze
 
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
@@ -96,6 +99,20 @@ class CommandProcessor
 
     count = @repl_manager.replica_count if count.nil?
     RESPData.new(type: :integer, value: count)
+  end
+
+  def config(args)
+    option, param = args
+    raise InvalidCommandError, 'INVALID CONFIG OPTION' unless option&.upcase == 'GET'
+    raise InvalidCommandError, 'INVALID CONFIG KEY' unless VALID_CONFIG_KEYS.include?(param&.downcase)
+
+    data = if param.downcase == 'dir'
+             ['dir', @repl_manager.rdb_dir]
+           else
+             ['dbfilename', @repl_manager.rdb_fname]
+           end
+
+    RESPData.new(type: :array, value: data)
   end
 
   def set(args)

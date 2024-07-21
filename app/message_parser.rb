@@ -4,7 +4,7 @@ class MessageParser
   AGGREGATE_KEYS = ['*', '$'].freeze
 
   class << self
-    def parse_message(socket:, timeout: 5)
+    def parse_message(socket:, timeout: nil)
       raise MessageParseTimeoutError unless IO.select([socket], nil, nil, timeout)
 
       chunk = socket.gets&.chomp
@@ -29,6 +29,7 @@ class MessageParser
       end
 
       return nil unless aggregate_stack.length == 0
+
       process_aggregate_values(root)
     end
 
