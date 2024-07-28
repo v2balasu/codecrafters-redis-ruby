@@ -1,8 +1,12 @@
 require 'base64'
 
 class DataStore
-  def initialize
+  attr_reader :rdb_dir, :rdb_fname
+
+  def initialize(rdb_dir, rdb_fname)
     @store = {}
+    @rdb_dir = rdb_dir
+    @rdb_fname = rdb_fname
     @mutex = Thread::Mutex.new
   end
 

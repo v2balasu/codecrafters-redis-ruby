@@ -30,9 +30,9 @@ class ReplicationManager
   end
 
   attr_reader :role, :master_replid, :master_repl_offset, :master_handshake_complete,
-              :replica_offset, :rdb_dir, :rdb_fname
+              :replica_offset
 
-  def initialize(role, rdb_dir, rdb_fname)
+  def initialize(role)
     @mutex = Thread::Mutex.new
     @replica_connections = []
     @replica_commands = []
@@ -42,8 +42,6 @@ class ReplicationManager
     @replica_offset = 0
     @clients_broadcasted = Set.new
     @replicas_acked = {}
-    @rdb_dir = rdb_dir
-    @rdb_fname = rdb_fname
   end
 
   def serialize

@@ -8,12 +8,12 @@ require_relative './replication_manager'
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port, master_host, master_port, rdb_dir, rdb_fname)
     @port = port
-    @data_store = DataStore.new
+    @data_store = DataStore.new(rdb_dir, rdb_fname)
     @master_host = master_host
     @master_port = master_port
 
     role = master_host.nil? ? 'master' : 'slave'
-    @repl_manager = ReplicationManager.new(role, rdb_dir, rdb_fname)
+    @repl_manager = ReplicationManager.new(role)
   end
 
   def start

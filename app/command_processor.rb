@@ -107,9 +107,9 @@ class CommandProcessor
     raise InvalidCommandError, 'INVALID CONFIG KEY' unless VALID_CONFIG_KEYS.include?(param&.downcase)
 
     data = if param.downcase == 'dir'
-             ['dir', @repl_manager.rdb_dir]
+             ['dir', @data_store.rdb_dir]
            else
-             ['dbfilename', @repl_manager.rdb_fname]
+             ['dbfilename', @data_store.rdb_fname]
            end
 
     RESPData.new(type: :array, value: data)
