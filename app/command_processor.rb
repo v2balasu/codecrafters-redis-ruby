@@ -38,6 +38,8 @@ class CommandProcessor
 
   TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
 
+  @@transaction_exec_mutex = Thread.mutex.new
+
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
     @repl_manager = repl_manager
@@ -167,12 +169,14 @@ class CommandProcessor
 
     results = []
 
-    while (command, args = @queued_commands.shift)
-      begin
-        resp = send(command.downcase.to_sym, args)
-        results << resp.value
-      rescue InvalidCommandError => e
-        results << e
+    @@transaction_exec_mutex.synchronize do
+      while (command, args = @queued_commands.shift)
+        begin
+          resp = send(command.downcase.to_sym, args)
+          results << resp.value
+        rescue InvalidCommandError => e
+          results << e
+        end
       end
     end
 
