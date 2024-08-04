@@ -129,7 +129,12 @@ class CommandProcessor
 
     value = @data_store.get(key)
 
-    raise 'Vaue is not numerical' unless value.to_i.to_s == value
+    if value.nil?
+      @data_store.set(key, '1', nil)
+      return RESPData.new(type: :integer, value: 1)
+    end
+
+    raise 'Value is not numerical' unless value.to_i.to_s == value
 
     new_val = value.to_i + 1
     @data_store.update(key, new_val.to_s)
