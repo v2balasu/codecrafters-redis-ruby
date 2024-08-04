@@ -1,7 +1,11 @@
 require_relative 'resp_data'
 require 'securerandom'
 
-class InvalidCommandError < StandardError; end
+class InvalidCommandError < StandardError
+  def message
+    "ERR #{super}"
+  end
+end
 
 class CommandProcessor
   VALID_COMMANDS = %w[
@@ -125,7 +129,7 @@ class CommandProcessor
 
   def incr(args)
     key = args.first
-    raise 'Key must be provided' if key.nil?
+    raise InvalidCommandError, 'Key must be provided' if key.nil?
 
     value = @data_store.get(key)
 
@@ -134,7 +138,7 @@ class CommandProcessor
       return RESPData.new(type: :integer, value: 1)
     end
 
-    raise 'Value is not numerical' unless value.to_i.to_s == value
+    raise InvalidCommandError, 'value is not an integer or out of range' unless value.to_i.to_s == value
 
     new_val = value.to_i + 1
     @data_store.update(key, new_val.to_s)
