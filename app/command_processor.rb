@@ -23,6 +23,7 @@ class CommandProcessor
     INCR
     MULTI
     EXEC
+    DISCARD
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -35,6 +36,8 @@ class CommandProcessor
 
   VALID_CONFIG_KEYS = %w[dir dbfilename].freeze
 
+  TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
+
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
     @repl_manager = repl_manager
@@ -46,7 +49,7 @@ class CommandProcessor
   def execute(command:, args:)
     return nil if @repl_manager.role == 'slave' && !VALID_REPLICA_COMMANDS.include?(command.upcase)
 
-    if command.upcase != 'EXEC' && @transaction_in_progress
+    if !TRANSACTION_CLEARING_CMDS.include?(command.upcase) && @transaction_in_progress
       @queued_commands << [command, args]
       return RESPData.new(type: :simple, value: 'QUEUED')
     end
@@ -176,6 +179,15 @@ class CommandProcessor
     @transaction_in_progress = false
 
     RESPData.new(type: :array, value: results)
+  end
+
+  def discard(_args)
+    raise InvalidCommandError, 'DISCARD without MULTI' unless @transaction_in_progress
+
+    @transaction_in_progress = false
+    @queued_commands = []
+
+    RESPData.new(type: :simple, value: 'OK')
   end
 
   def set(args)
