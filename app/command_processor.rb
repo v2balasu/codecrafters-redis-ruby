@@ -21,6 +21,7 @@ class CommandProcessor
     CONFIG
     KEYS
     INCR
+    MULTI
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -143,6 +144,10 @@ class CommandProcessor
     new_val = value.to_i + 1
     @data_store.update(key, new_val.to_s)
     RESPData.new(type: :integer, value: new_val)
+  end
+
+  def multi(_args)
+    RESPData.new(type: :simple, value: 'OK')
   end
 
   def set(args)
