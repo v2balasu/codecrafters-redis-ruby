@@ -24,6 +24,7 @@ class CommandProcessor
     MULTI
     EXEC
     DISCARD
+    TYPE
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -192,6 +193,17 @@ class CommandProcessor
     @queued_commands = []
 
     RESPData.new(type: :simple, value: 'OK')
+  end
+
+  def type(args)
+    key = args.first
+
+    raise InvalidCommandError, 'key must be provided' if key.nil?
+
+    val = @data_store.get(key)
+    resp_type = val.nil? ? 'none' : 'string'
+
+    RESPData.new(type: :simple, value: resp_type)
   end
 
   def set(args)
