@@ -16,6 +16,7 @@ class CommandProcessor
     WAIT
     CONFIG
     KEYS
+    INCR
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -120,6 +121,19 @@ class CommandProcessor
     raise InvalidCommandError, 'only * is supported' unless args&.first == '*'
 
     RESPData.new(type: :array, value: @data_store.keys)
+  end
+
+  def incr(args)
+    key = args.first
+    raise 'Key must be provided' if key.nil?
+
+    value = @data_store.get(key)
+
+    raise 'Vaue is not numerical' unless value.to_i.to_s == value
+
+    new_val = (value.to_i + 1).to_s
+    @data_store.update(key, new_val)
+    RESPData.new(type: :integer, value: new_val)
   end
 
   def set(args)

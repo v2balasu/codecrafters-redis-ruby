@@ -34,6 +34,14 @@ class DataStore
     end
   end
 
+  def update(key, value)
+    @mutex.synchronize do
+      return unless @store[key]
+
+      @store[key][:value] = value
+    end
+  end
+
   def get(key)
     @mutex.synchronize do
       item = @store[key]
