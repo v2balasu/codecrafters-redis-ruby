@@ -10,8 +10,13 @@ class DataStore
 
     return unless rdb_dir && rdb_fname
 
-    db = RDBReader.execute(dir: rdb_dir, filename: rdb_fname)
-    @store = db[:databases]&.first || {}
+    begin
+      db = RDBReader.execute(dir: rdb_dir, filename: rdb_fname)
+      @store = db[:databases]&.first || {}
+    rescue StandardError => e
+      pp "Error parsing db file: #{e.message}"
+      @store = {}
+    end
   end
 
   def set(key, value, expiry_seconds)
