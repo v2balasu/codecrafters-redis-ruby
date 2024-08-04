@@ -1,13 +1,18 @@
 require 'base64'
+require 'byebug'
+require_relative 'rdb_reader'
 
 class DataStore
   attr_reader :rdb_dir, :rdb_fname
 
   def initialize(rdb_dir, rdb_fname)
     @store = {}
-    @rdb_dir = rdb_dir
-    @rdb_fname = rdb_fname
     @mutex = Thread::Mutex.new
+
+    return unless rdb_dir && rdb_fname
+
+    db = RDBReader.execute(dir: rdb_dir, filename: rdb_fname)
+    @store = db[:databases]&.first || {}
   end
 
   def set(key, value, expiry_seconds)
