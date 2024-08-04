@@ -38,7 +38,7 @@ class CommandProcessor
 
   TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
 
-  @@transaction_exec_mutex = Thread.mutex.new
+  @@transaction_exec_mutex = Thread::Mutex.new
 
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
