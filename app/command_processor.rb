@@ -131,9 +131,9 @@ class CommandProcessor
 
     raise 'Vaue is not numerical' unless value.to_i.to_s == value
 
-    new_val = (value.to_i + 1).to_s
-    @data_store.update(key, new_val)
-    RESPData.new(type: :integer, value: new_val.to_i)
+    new_val = value.to_i + 1
+    @data_store.update(key, new_val.to_s)
+    RESPData.new(type: :integer, value: new_val)
   end
 
   def set(args)
