@@ -25,6 +25,7 @@ class CommandProcessor
     EXEC
     DISCARD
     TYPE
+    XADD
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -195,13 +196,41 @@ class CommandProcessor
     RESPData.new(type: :simple, value: 'OK')
   end
 
+  def xadd(args)
+    stream_key, entry_id, *entry_kv = args
+
+    stream = @data_store.get(stream_key) || []
+    entries = {
+      id: entry_id
+    }
+
+    stream << entries
+
+    while entry_kv.length > 0
+      key, value = entry_kv.shift(2)
+      raise InvalidCommandError, 'Missing value for stream entry' if value.nil?
+
+      entries[key] = value
+    end
+
+    @data_store.set(stream_key, stream, nil)
+
+    RESPData.new(type: :bulk, value: stream_key)
+  end
+
   def type(args)
     key = args.first
 
     raise InvalidCommandError, 'key must be provided' if key.nil?
 
     val = @data_store.get(key)
-    resp_type = val.nil? ? 'none' : 'string'
+    resp_type = if val.nil?
+                  'none'
+                elsif val.is_a?(Array)
+                  'stream'
+                else
+                  'string'
+                end
 
     RESPData.new(type: :simple, value: resp_type)
   end
