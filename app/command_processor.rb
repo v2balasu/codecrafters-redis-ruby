@@ -15,6 +15,7 @@ class CommandProcessor
     PSYNC
     WAIT
     CONFIG
+    KEYS
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -113,6 +114,12 @@ class CommandProcessor
            end
 
     RESPData.new(type: :array, value: data)
+  end
+
+  def keys(args)
+    raise InvalidCommandError, 'only * is supported' unless args&.first == '*'
+
+    RESPData.new(type: :array, value: @data_store.keys)
   end
 
   def set(args)

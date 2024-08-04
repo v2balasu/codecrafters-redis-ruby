@@ -42,6 +42,16 @@ class DataStore
     end
   end
 
+  def keys
+    @mutex.synchronize do
+      @store.reject! do |_k, v|
+        !v[:expires_at].nil? && v[:expires_at] < Time.now
+      end
+
+      @store.keys
+    end
+  end
+
   def to_rdb
     # TODO: Hardcoding a empty DB for now, serialzie to full RDB later
     Base64.decode64(
