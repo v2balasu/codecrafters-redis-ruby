@@ -22,6 +22,7 @@ class CommandProcessor
     KEYS
     INCR
     MULTI
+    EXEC
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -148,6 +149,10 @@ class CommandProcessor
 
   def multi(_args)
     RESPData.new(type: :simple, value: 'OK')
+  end
+
+  def exec(_args)
+    raise InvalidCommandError, 'EXEC without MULTI'
   end
 
   def set(args)
