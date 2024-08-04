@@ -7,6 +7,8 @@ class DataStore
   def initialize(rdb_dir, rdb_fname)
     @store = {}
     @mutex = Thread::Mutex.new
+    @rdb_dir = rdb_dir
+    @rdb_fname = rdb_fname
 
     return unless rdb_dir && rdb_fname
 
