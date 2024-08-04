@@ -1,6 +1,8 @@
 class RESPData
   VALID_TYPES = %i[nil simple bulk error array integer].freeze
 
+  attr_reader :value
+
   def initialize(type:, value:)
     @type = type
     @value = value
@@ -22,8 +24,8 @@ class RESPData
   def encode_data(type:, value:)
     return "$-1\r\n" if value.nil?
 
-    return ":#{value}\r\n" if type == :integer 
-    
+    return ":#{value}\r\n" if type == :integer
+
     return "-#{value}\r\n" if type == :error
 
     return "+#{value}\r\n" if type == :simple
@@ -33,7 +35,16 @@ class RESPData
     return unless type == :array && value.is_a?(Array)
 
     inner_content = value.map do |element|
-      element_type = element.is_a?(Array) ? :array : :bulk
+      element_type = if element.is_a?(Array)
+                       :array
+                     elsif element.is_a?(Integer)
+                       :integer
+                     elsif element.is_a?(StandardError)
+                       :error
+                     else
+                       :bulk
+                     end
+
       encode_data(type: element_type, value: element)
     end.join
 

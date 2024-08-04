@@ -39,10 +39,17 @@ class CommandProcessor
     @data_store = data_store
     @repl_manager = repl_manager
     @client_id = SecureRandom.uuid
+    @transaction_in_progress = false
+    @queued_commands = []
   end
 
   def execute(command:, args:)
     return nil if @repl_manager.role == 'slave' && !VALID_REPLICA_COMMANDS.include?(command.upcase)
+
+    if command.upcase != 'EXEC' && @transaction_in_progress
+      @queued_commands << [command, args]
+      return RESPData.new(type: :simple, value: 'QUEUED')
+    end
 
     if VALID_COMMANDS.include?(command.upcase)
       result = send(command.downcase.to_sym, args)
@@ -148,11 +155,27 @@ class CommandProcessor
   end
 
   def multi(_args)
+    @transaction_in_progress = true
     RESPData.new(type: :simple, value: 'OK')
   end
 
   def exec(_args)
-    raise InvalidCommandError, 'EXEC without MULTI'
+    raise InvalidCommandError, 'EXEC without MULTI' unless @transaction_in_progress
+
+    results = []
+
+    while (command, args = @queued_commands.shift)
+      begin
+        resp = send(command.downcase.to_sym, args)
+        results << resp.value
+      rescue InvalidCommandError => e
+        results << e
+      end
+    end
+
+    @transaction_in_progress = false
+
+    RESPData.new(type: :array, value: results)
   end
 
   def set(args)
