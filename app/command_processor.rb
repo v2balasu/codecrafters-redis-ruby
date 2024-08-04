@@ -215,7 +215,7 @@ class CommandProcessor
 
     @data_store.set(stream_key, stream, nil)
 
-    RESPData.new(type: :bulk, value: stream_key)
+    RESPData.new(type: :bulk, value: entry_id)
   end
 
   def type(args)
