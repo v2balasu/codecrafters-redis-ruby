@@ -1,5 +1,4 @@
 require 'base64'
-require 'byebug'
 require_relative 'rdb_reader'
 
 class DataStore
