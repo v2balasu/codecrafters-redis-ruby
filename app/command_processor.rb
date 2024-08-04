@@ -133,7 +133,7 @@ class CommandProcessor
 
     new_val = (value.to_i + 1).to_s
     @data_store.update(key, new_val)
-    RESPData.new(type: :integer, value: new_val)
+    RESPData.new(type: :integer, value: new_val.to_i)
   end
 
   def set(args)
