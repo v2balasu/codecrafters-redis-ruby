@@ -45,6 +45,7 @@ class RESPData
                        :bulk
                      end
 
+      element = element.message if element.is_a?(StandardError)
       encode_data(type: element_type, value: element)
     end.join
 
