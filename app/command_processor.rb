@@ -232,7 +232,7 @@ class CommandProcessor
 
     return if current_ms.nil?
 
-    return unless current_ms >= new_ms || (current_ms == new_ms && current_seq_no >= new_seq_no)
+    return unless current_ms > new_ms || (current_ms == new_ms && current_seq_no >= new_seq_no)
 
     raise InvalidCommandError, 'The ID specified in XADD is equal or smaller than the target stream top item'
   end
