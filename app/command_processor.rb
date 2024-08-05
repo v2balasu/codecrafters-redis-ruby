@@ -200,6 +200,9 @@ class CommandProcessor
     stream_key, entry_id, *entry_kv = args
 
     stream = @data_store.get(stream_key) || []
+    current_entry_id = stream.count.zero? ? nil : stream.last[:id]
+    validate_new_entry(entry_id, current_entry_id)
+
     entries = {
       id: entry_id
     }
@@ -216,6 +219,22 @@ class CommandProcessor
     @data_store.set(stream_key, stream, nil)
 
     RESPData.new(type: :bulk, value: entry_id)
+  end
+
+  def validate_new_entry(new_entry_id, current_entry_id)
+    new_ms, new_seq_no = new_entry_id.split('-').map(&:to_i)
+    if (new_ms.zero? && new_seq_no.zero?) || new_ms.nil? || new_seq_no.nil?
+      raise InvalidCommandError,
+            'The ID specified in XADD must be greater than 0-0'
+    end
+
+    current_ms, current_seq_no = current_entry_id&.split('-')&.map(&:to_i)
+
+    return if current_ms.nil?
+
+    return unless current_ms >= new_ms || (current_ms == new_ms && current_seq_no >= new_seq_no)
+
+    raise InvalidCommandError, 'The ID specified in XADD is equal or smaller than the target stream top item'
   end
 
   def type(args)
