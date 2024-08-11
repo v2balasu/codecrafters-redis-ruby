@@ -315,7 +315,7 @@ class CommandProcessor
       end
     end
 
-    return RESPData.new(type: :string, val: nil) if ranges.empty?
+    return RESPData.new(type: :string, value: nil) if ranges.empty?
 
     data = ranges.map do |stream_key, range|
       [
