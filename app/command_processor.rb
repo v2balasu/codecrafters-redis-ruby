@@ -293,7 +293,6 @@ class CommandProcessor
     option = args.shift
     block_ms = args.shift if option.upcase == 'BLOCK'
     block_until_read = block_ms&.to_i&.zero?
-    pp "BLOCK UNTIL READ #{block_until_read} BLOCK MS #{block_ms}" if block_ms
     block_until_time = (Time.now + block_ms.to_i / 1000 if block_ms && !block_until_read)
 
     args.reject! { |a| a.upcase == 'STREAMS' }
