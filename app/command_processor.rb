@@ -299,7 +299,26 @@ class CommandProcessor
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
 
     stream_keys = args[0..args.length / 2 - 1]
-    search_ids = args[(args.length / 2)..]
+    raw_search_ids = args[(args.length / 2)..]
+    search_ids = []
+
+    raw_search_ids.each_with_index do |id, idx|
+      if id != '$'
+        search_ids << id
+        next
+      end
+
+      stream_key = stream_keys[idx]
+      stream = @data_store.get(stream_key)
+
+      if stream.nil?
+        search_ids << '0-0'
+        next
+      end
+
+      search_ids << stream.last[:id]
+    end
+
     ranges = {}
 
     loop do
