@@ -290,22 +290,36 @@ class CommandProcessor
   end
 
   def xread(args)
-    _streams, stream_key, search_id = args
+    _streams_kwarg, *read_args = args
 
-    raise InvalidCommandError, 'Search id must be provided' if search_id.nil?
+    raise InvalidCommandError, 'Invalid arg count' unless read_args.length.even?
 
-    range = @data_store.get(stream_key)
+    ordered_streams = []
+    search_ids = []
 
-    raise InvalidCommandError, 'Stream not found' if range.nil? || !range.is_a?(Array)
+    while (stream = @data_store.get(read_args.first))
+      ordered_streams << { key: read_args.first, val: stream }
+      read_args.shift
+    end
 
-    range = range.reject { |entry| entry[:id] < search_id }
+    search_ids = read_args
 
-    data = [
+    raise InvalidCommandError, '# of streams does not match search ids' unless ordered_streams.count == search_ids.count
+
+    ranges = {}
+
+    ordered_streams.each_with_index do |str, idx|
+      search_id = search_ids[idx]
+      stream_key = str[:key]
+      ranges[stream_key] = str[:val].reject { |entry| entry[:id] <= search_id }
+    end
+
+    data = ranges.map do |stream_key, range|
       [
         stream_key,
         range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
       ]
-    ]
+    end
 
     RESPData.new(type: :array, value: data)
   end
