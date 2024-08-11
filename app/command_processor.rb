@@ -27,6 +27,7 @@ class CommandProcessor
     TYPE
     XADD
     XRANGE
+    XREAD
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -284,6 +285,25 @@ class CommandProcessor
     range = range.reject { |entry| entry[:id] > end_id } unless end_id.nil? || end_id == '+'
 
     data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
+
+    RESPData.new(type: :array, value: data)
+  end
+
+  def xread(args)
+    _streams, stream_key, search_id = args
+
+    raise InvalidCommandError, 'Search id must be provided' if search_id.nil?
+
+    range = @data_store.get(stream_key)
+
+    raise InvalidCommandError, 'Stream not found' if range.nil? || !range.is_a?(Array)
+
+    range = range.reject { |entry| entry[:id] < search_id }
+
+    data = [[
+      stream_key,
+      [range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }]
+    ]]
 
     RESPData.new(type: :array, value: data)
   end
