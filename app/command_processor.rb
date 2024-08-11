@@ -197,33 +197,33 @@ class CommandProcessor
   end
 
   def xadd(args)
-    stream_key, entry_id, *entry_kv = args
+    stream_key, raw_entry_id, *entry_kv = args
 
-    stream = @data_store.get(stream_key) || []
-    current_entry_id = stream.count.zero? ? nil : stream.last[:id]
-    entry_id = validate_new_entry(entry_id, current_entry_id)
+    entry_id = @data_store.with_stream_lock(stream_key) do |stream, current_entry_id|
+      id = if raw_entry_id != '*'
+             extract_entry_id(raw_entry_id, current_entry_id)
+           else
+             "#{(Time.now.to_f * 1000).to_i}-0"
+           end
 
-    entries = {
-      id: entry_id
-    }
+      entry = { id: id }
 
-    stream << entries
+      while entry_kv.length > 0
+        key, value = entry_kv.shift(2)
+        raise InvalidCommandError, 'Missing value for stream entry' if value.nil?
 
-    while entry_kv.length > 0
-      key, value = entry_kv.shift(2)
-      raise InvalidCommandError, 'Missing value for stream entry' if value.nil?
+        entry[key] = value
+      end
 
-      entries[key] = value
+      stream << entry
     end
-
-    @data_store.set(stream_key, stream, nil)
 
     RESPData.new(type: :bulk, value: entry_id)
   end
 
-  def validate_new_entry(new_entry_id, current_entry_id)
+  def extract_entry_id(raw_entry_id, current_entry_id)
     current_ms, current_seq_no = current_entry_id&.split('-')&.map(&:to_i)
-    new_ms_and_seq_no = /(?<ms>[0-9]+)-(?<seq_no>\*|[0-9]+)/.match(new_entry_id)
+    new_ms_and_seq_no = /(?<ms>[0-9]+)-(?<seq_no>\*|[0-9]+)/.match(raw_entry_id)
 
     if new_ms_and_seq_no
       new_ms = new_ms_and_seq_no['ms'].to_i
