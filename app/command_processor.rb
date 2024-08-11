@@ -201,7 +201,7 @@ class CommandProcessor
 
     stream = @data_store.get(stream_key) || []
     current_entry_id = stream.count.zero? ? nil : stream.last[:id]
-    validate_new_entry(entry_id, current_entry_id)
+    entry_id = validate_new_entry(entry_id, current_entry_id)
 
     entries = {
       id: entry_id
@@ -222,17 +222,32 @@ class CommandProcessor
   end
 
   def validate_new_entry(new_entry_id, current_entry_id)
-    new_ms, new_seq_no = new_entry_id.split('-').map(&:to_i)
-    if (new_ms.zero? && new_seq_no.zero?) || new_ms.nil? || new_seq_no.nil?
+    current_ms, current_seq_no = current_entry_id&.split('-')&.map(&:to_i)
+    new_ms_and_seq_no = /(?<ms>[0-9]+)-(?<seq_no>\*|[0-9]+)/.match(new_entry_id)
+
+    if new_ms_and_seq_no
+      new_ms = new_ms_and_seq_no['ms'].to_i
+      new_seq_no = if new_ms_and_seq_no['seq_no'] == '*'
+                     if current_seq_no.nil? || current_ms != new_ms
+                       new_ms == 0 ? 1 : 0
+                     else
+                       current_seq_no + 1
+                     end
+                   else
+                     new_ms_and_seq_no['seq_no'].to_i
+                   end
+    end
+
+    if new_ms.nil? || new_seq_no.nil? || (new_ms.zero? && new_seq_no.zero?)
       raise InvalidCommandError,
             'The ID specified in XADD must be greater than 0-0'
     end
 
-    current_ms, current_seq_no = current_entry_id&.split('-')&.map(&:to_i)
+    entry_id = "#{new_ms}-#{new_seq_no}"
 
-    return if current_ms.nil?
+    return entry_id if current_ms.nil? || new_ms > current_ms
 
-    return unless current_ms > new_ms || (current_ms == new_ms && current_seq_no >= new_seq_no)
+    return entry_id if new_ms == current_ms && (current_seq_no.nil? || new_seq_no > current_seq_no)
 
     raise InvalidCommandError, 'The ID specified in XADD is equal or smaller than the target stream top item'
   end
