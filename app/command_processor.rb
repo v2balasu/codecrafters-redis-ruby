@@ -300,10 +300,12 @@ class CommandProcessor
 
     range = range.reject { |entry| entry[:id] < search_id }
 
-    data = [[
-      stream_key,
-      [range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }]
-    ]]
+    data = [
+      [
+        stream_key,
+        range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
+      ]
+    ]
 
     RESPData.new(type: :array, value: data)
   end
