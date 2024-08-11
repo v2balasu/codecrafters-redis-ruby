@@ -292,19 +292,17 @@ class CommandProcessor
   def xread(args)
     option = args.shift
     block_ms = args.shift if option.upcase == 'BLOCK'
-    block_until = (Time.now + block_ms.to_i / 1000 if block_ms)
+    block_until_read = block_ms&.to_i&.zero?
+    block_until_time = (Time.now + block_ms.to_i / 1000 if block_ms && !block_until_read)
 
     args.reject! { |a| a.upcase == 'STREAMS' }
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
 
     stream_keys = args[0..args.length / 2 - 1]
     search_ids = args[(args.length / 2)..]
+    ranges = {}
 
-    ranges = nil
-
-    while ranges.nil? || (ranges.count.zero? && block_until && Time.now < block_until)
-      ranges ||= {}
-
+    loop do
       stream_keys.each_with_index do |key, idx|
         search_id = search_ids[idx]
         stream = @data_store.get(key)
@@ -313,6 +311,8 @@ class CommandProcessor
 
         ranges[key] = range
       end
+
+      break if !ranges.empty? || (block_until_time && Time.now > block_until_time)
     end
 
     return RESPData.new(type: :nil, value: nil) if ranges.empty?
