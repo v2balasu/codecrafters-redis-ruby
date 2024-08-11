@@ -290,28 +290,29 @@ class CommandProcessor
   end
 
   def xread(args)
-    _streams_kwarg, *read_args = args
+    option = args.shift
+    block_ms = args.shift if option.upcase == 'BLOCK'
+    block_until = (Time.now + block_ms.to_i / 1000 if block_ms)
 
-    raise InvalidCommandError, 'Invalid arg count' unless read_args.length.even?
+    args.reject! { |a| a.upcase == 'STREAMS' }
+    raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
 
-    ordered_streams = []
-    search_ids = []
+    stream_keys = args[0..args.length / 2 - 1]
+    search_ids = args[(args.length / 2)..]
 
-    while (stream = @data_store.get(read_args.first))
-      ordered_streams << { key: read_args.first, val: stream }
-      read_args.shift
-    end
+    ranges = nil
 
-    search_ids = read_args
+    while ranges.nil? || (ranges.count.zero? && block_until && Time.now < block_until)
+      ranges ||= {}
 
-    raise InvalidCommandError, '# of streams does not match search ids' unless ordered_streams.count == search_ids.count
+      stream_keys.each_with_index do |key, idx|
+        search_id = search_ids[idx]
+        stream = @data_store.get(key)
+        range = stream&.reject { |entry| entry[:id] <= search_id }
+        next unless range && !range.empty?
 
-    ranges = {}
-
-    ordered_streams.each_with_index do |str, idx|
-      search_id = search_ids[idx]
-      stream_key = str[:key]
-      ranges[stream_key] = str[:val].reject { |entry| entry[:id] <= search_id }
+        ranges[key] = range
+      end
     end
 
     data = ranges.map do |stream_key, range|
