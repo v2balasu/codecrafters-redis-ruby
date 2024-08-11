@@ -26,6 +26,7 @@ class CommandProcessor
     DISCARD
     TYPE
     XADD
+    XRANGE
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -267,6 +268,24 @@ class CommandProcessor
                 end
 
     RESPData.new(type: :simple, value: resp_type)
+  end
+
+  def xrange(args)
+    stream_key, start_id, end_id = args
+
+    # TODO: start_id and end_id validation
+    raise InvalidCommandError, 'Invalid inpput' if stream_key.nil?
+
+    range = @data_store.get(stream_key)
+
+    raise InvalidCommandError, 'Stream not found' if range.nil? || !range.is_a?(Array)
+
+    range = range.reject { |entry| entry[:id] < start_id } unless start_id.nil?
+    range = range.reject { |entry| entry[:id] > end_id } unless end_id.nil?
+
+    data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a] }
+
+    RESPData.new(type: :array, value: data)
   end
 
   def set(args)
