@@ -280,7 +280,7 @@ class CommandProcessor
 
     raise InvalidCommandError, 'Stream not found' if range.nil? || !range.is_a?(Array)
 
-    range = range.reject { |entry| entry[:id] < start_id } unless start_id.nil?
+    range = range.reject { |entry| entry[:id] < start_id } unless start_id.nil? || start_id == '-'
     range = range.reject { |entry| entry[:id] > end_id } unless end_id.nil?
 
     data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
