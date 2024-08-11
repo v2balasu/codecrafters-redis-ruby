@@ -283,7 +283,7 @@ class CommandProcessor
     range = range.reject { |entry| entry[:id] < start_id } unless start_id.nil?
     range = range.reject { |entry| entry[:id] > end_id } unless end_id.nil?
 
-    data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a] }
+    data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
 
     RESPData.new(type: :array, value: data)
   end
