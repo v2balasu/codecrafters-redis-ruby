@@ -57,7 +57,7 @@ class CommandProcessor
 
     if !TRANSACTION_CLEARING_CMDS.include?(command.upcase) && @transaction_in_progress
       @queued_commands << [command, args]
-      return RESPData.new(type: :simple, value: 'QUEUED')
+      return RESPData.new('QUEUED', string_type: :simple)
     end
 
     if VALID_COMMANDS.include?(command.upcase)
@@ -72,27 +72,27 @@ class CommandProcessor
   private
 
   def command(_args)
-    RESPData.new(type: :simple, value: 'OK')
+    RESPData.new('OK', string_type: :simple)
   end
 
   def echo(args)
-    RESPData.new(type: :bulk, value: args.first)
+    RESPData.new(args.first)
   end
 
   def ping(_args)
-    @repl_manager.role == 'slave' ? nil : RESPData.new(type: :simple, value: 'PONG')
+    @repl_manager.role == 'slave' ? nil : RESPData.new('PONG', string_type: :simple)
   end
 
   def info(_args)
-    RESPData.new(type: :bulk, value: @repl_manager.serialize)
+    RESPData.new(@repl_manager.serialize)
   end
 
   def replconf(args)
     if @repl_manager.role == 'slave' && (args&.first == 'GETACK' && args&.last == '*')
-      return RESPData.new(type: :array, value: ['REPLCONF', 'ACK', @repl_manager.replica_offset.to_s])
+      return RESPData.new(['REPLCONF', 'ACK', @repl_manager.replica_offset.to_s])
     end
 
-    RESPData.new(type: :simple, value: 'OK')
+    RESPData.new('OK', string_type: :simple)
   end
 
   def psync(args)
@@ -102,7 +102,7 @@ class CommandProcessor
     raise InvalidCommandError unless req_repl_id == '?' && req_repl_offset == '-1'
 
     full_resync_resp = "FULLRESYNC #{@repl_manager.master_replid} #{@repl_manager.master_repl_offset}"
-    RESPData.new(type: :simple, value: full_resync_resp)
+    RESPData.new(full_resync_resp, string_type: :simple)
   end
 
   def wait(args)
@@ -110,7 +110,7 @@ class CommandProcessor
     sleep_seconds = timeout.to_f / 1000.00
     expiry = Time.now + sleep_seconds
 
-    return RESPData.new(type: :integer, value: 0) if @repl_manager.replica_count == 0
+    return RESPData.new(0) if @repl_manager.replica_count == 0
 
     @repl_manager.ack_replicas(client_id: @client_id)
     count = @repl_manager.replicas_acked(client_id: @client_id)
@@ -122,7 +122,7 @@ class CommandProcessor
     end
 
     count = @repl_manager.replica_count if count.nil?
-    RESPData.new(type: :integer, value: count)
+    RESPData.new(count)
   end
 
   def config(args)
@@ -136,13 +136,13 @@ class CommandProcessor
              ['dbfilename', @data_store.rdb_fname]
            end
 
-    RESPData.new(type: :array, value: data)
+    RESPData.new(data)
   end
 
   def keys(args)
     raise InvalidCommandError, 'only * is supported' unless args&.first == '*'
 
-    RESPData.new(type: :array, value: @data_store.keys)
+    RESPData.new(@data_store.keys)
   end
 
   def incr(args)
@@ -153,19 +153,19 @@ class CommandProcessor
 
     if value.nil?
       @data_store.set(key, '1', nil)
-      return RESPData.new(type: :integer, value: 1)
+      return RESPData.new(1)
     end
 
     raise InvalidCommandError, 'value is not an integer or out of range' unless value.to_i.to_s == value
 
     new_val = value.to_i + 1
     @data_store.update(key, new_val.to_s)
-    RESPData.new(type: :integer, value: new_val)
+    RESPData.new(new_val)
   end
 
   def multi(_args)
     @transaction_in_progress = true
-    RESPData.new(type: :simple, value: 'OK')
+    RESPData.new('OK', string_type: :simple)
   end
 
   def exec(_args)
@@ -186,7 +186,7 @@ class CommandProcessor
 
     @transaction_in_progress = false
 
-    RESPData.new(type: :array, value: results)
+    RESPData.new(results)
   end
 
   def discard(_args)
@@ -195,7 +195,7 @@ class CommandProcessor
     @transaction_in_progress = false
     @queued_commands = []
 
-    RESPData.new(type: :simple, value: 'OK')
+    RESPData.new('OK', string_type: 'simple')
   end
 
   def xadd(args)
@@ -220,7 +220,7 @@ class CommandProcessor
       stream << entry
     end
 
-    RESPData.new(type: :bulk, value: entry_id)
+    RESPData.new(entry_id)
   end
 
   def extract_entry_id(raw_entry_id, current_entry_id)
@@ -268,7 +268,7 @@ class CommandProcessor
                   'string'
                 end
 
-    RESPData.new(type: :simple, value: resp_type)
+    RESPData.new(resp_type, string_type: :simple)
   end
 
   def xrange(args)
@@ -286,7 +286,7 @@ class CommandProcessor
 
     data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
 
-    RESPData.new(type: :array, value: data)
+    RESPData.new(data)
   end
 
   def xread(args)
@@ -334,7 +334,7 @@ class CommandProcessor
       break if !ranges.empty? || (block_until_time && Time.now > block_until_time)
     end
 
-    return RESPData.new(type: :nil, value: nil) if ranges.empty?
+    return RESPData.new(nil) if ranges.empty?
 
     data = ranges.map do |stream_key, range|
       [
@@ -343,7 +343,7 @@ class CommandProcessor
       ]
     end
 
-    RESPData.new(type: :array, value: data)
+    RESPData.new(data)
   end
 
   def set(args)
@@ -355,7 +355,7 @@ class CommandProcessor
 
     @data_store.set(key, value, expiry_seconds)
 
-    @repl_manager.role == 'slave' ? nil : RESPData.new(type: :simple, value: 'OK')
+    @repl_manager.role == 'slave' ? nil : RESPData.new('OK', string_type: :simple)
   end
 
   def parse_expiry_seconds(expiry)
@@ -368,6 +368,6 @@ class CommandProcessor
 
   def get(args)
     val = @data_store.get(args.first)
-    RESPData.new(type: :bulk, value: val)
+    RESPData.new(val)
   end
 end

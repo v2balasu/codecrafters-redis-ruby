@@ -19,7 +19,7 @@ class ClientConnection
       begin
         response = @command_processor.execute(command: command, args: args)
       rescue InvalidCommandError => e
-        response = RESPData.new(type: :error, value: e.message)
+        response = RESPData.new(e)
       end
 
       response&.encode&.split('\n')&.each { |chunk| @socket.puts(chunk) }

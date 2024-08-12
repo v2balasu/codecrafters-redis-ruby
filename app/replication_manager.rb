@@ -4,7 +4,7 @@ require_relative 'resp_data'
 require 'set'
 
 class ReplicationManager
-  CLIENT_ACK = RESPData.new(type: :array, value: ['REPLCONF', 'GETACK', '*']).encode
+  CLIENT_ACK = RESPData.new(['REPLCONF', 'GETACK', '*']).encode
 
   def self.complete_master_handshake(socket:, port:)
     ping_resp = send_handshake_command(socket: socket, data: ['PING'])
@@ -24,7 +24,7 @@ class ReplicationManager
   end
 
   def self.send_handshake_command(socket:, data:)
-    send_handshake_command = RESPData.new(type: :array, value: data).encode
+    send_handshake_command = RESPData.new(data).encode
     send_handshake_command.split('\r\n').each { |chunk| socket.puts chunk }
     MessageParser.parse_message(socket: socket)
   end
@@ -56,7 +56,7 @@ class ReplicationManager
   def increment_replica_offset(command:, args:)
     return unless @role == 'slave'
 
-    bytes_processed = RESPData.new(type: :array, value: [command, args].flatten)
+    bytes_processed = RESPData.new([command, args].flatten)
                               .encode
                               .bytes
                               .length
@@ -77,7 +77,7 @@ class ReplicationManager
 
   def queue_command(command, args, client_id)
     @mutex.synchronize do
-      resp_command = RESPData.new(type: :array, value: [command, args].flatten)
+      resp_command = RESPData.new([command, args].flatten)
       @replica_commands << [client_id, resp_command.encode]
     end
   end
