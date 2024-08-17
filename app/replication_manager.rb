@@ -89,26 +89,29 @@ class ReplicationManager
         return
       end
 
-      @replicas_acked[client_id] = 0
+      @replicas_acked[client_id] ||= []
 
       unhealthy_connections = []
 
       @replica_connections.each do |connection|
+        next if @replicas_acked[client_id].include?(connection)
+
         CLIENT_ACK.split('\n').each { |chunk| connection.puts chunk }
         MessageParser.parse_message(socket: connection, timeout: 0.1)
-        @replicas_acked[client_id] += 1
+        @replicas_acked[client_id] << connection
       rescue StandardError => e
         unhealthy_connections << connection unless e.is_a?(MessageParseTimeoutError)
       end
 
       @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
 
-      @clients_broadcasted.delete(client_id)
+      @replicas_acked[client_id].count
     end
   end
 
-  def replicas_acked(client_id:)
-    @replicas_acked[client_id]
+  def reset_replica_ack(client_id:)
+    @clients_broadcasted.delete(client_id)
+    @replicas_acked[client_id] = nil
   end
 
   def broadcast

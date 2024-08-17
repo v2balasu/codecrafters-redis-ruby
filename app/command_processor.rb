@@ -110,18 +110,18 @@ class CommandProcessor
     sleep_seconds = timeout.to_f / 1000.00
     expiry = Time.now + sleep_seconds
 
-    return RESPData.new(0) if @repl_manager.replica_count == 0
+    return RESPData.new(0) if @repl_manager.replica_count.zero?
 
-    @repl_manager.ack_replicas(client_id: @client_id)
-    count = @repl_manager.replicas_acked(client_id: @client_id)
+    count = @repl_manager.ack_replicas(client_id: @client_id)
 
     while (count.nil? || count < num_replicas) && (expiry.nil? || Time.now < expiry)
       sleep(0.1)
-      @repl_manager.ack_replicas(client_id: @client_id) if count.nil?
-      count = @repl_manager.replicas_acked(client_id: @client_id)
+      count = @repl_manager.ack_replicas(client_id: @client_id)
     end
 
     count = @repl_manager.replica_count if count.nil?
+    @repl_manager.reset_replica_ack(client_id: @client_id)
+
     RESPData.new(count)
   end
 
