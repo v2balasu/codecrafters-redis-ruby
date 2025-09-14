@@ -332,7 +332,7 @@ class CommandProcessor
         ranges[key] = range
       end
 
-      break if !ranges.empty? || (block_until_time && Time.now > block_until_time)
+      break if !ranges.empty? || (block_until_time && (Time.now > block_until_time))
     end
 
     return RESPData.new(RESPData::NullArray.new) if ranges.empty?
