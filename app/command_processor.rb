@@ -335,7 +335,7 @@ class CommandProcessor
       break if !ranges.empty? || (block_until_time && Time.now > block_until_time)
     end
 
-    return RESPData.new(nil) if ranges.empty?
+    return RESPData.new(RESPData::NullArray.new) if ranges.empty?
 
     data = ranges.map do |stream_key, range|
       [

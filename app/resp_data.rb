@@ -1,4 +1,7 @@
 class RESPData
+  class NullArray
+  end
+
   attr_reader :value
 
   def initialize(value, string_type: nil)
@@ -25,6 +28,8 @@ class RESPData
     return "+#{value}\r\n" if value.is_a?(String) && string_type == :simple
 
     return "$#{value.length}\r\n#{value}\r\n" if value.is_a?(String)
+
+    return "*-1\r\n" if value.is_a?(RESPData::NullArray)
 
     return unless value.is_a?(Array)
 
