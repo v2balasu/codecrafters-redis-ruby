@@ -58,7 +58,7 @@ class CommandProcessor
 
     if !TRANSACTION_CLEARING_CMDS.include?(command.upcase) && @transaction_in_progress
       @queued_commands << [command, args]
-      return RESPData.new('QUEUED', string_type: :simple)
+      return RESPData.new(RESPData::SimpleString.new("QUEUED"))
     end
 
     if VALID_COMMANDS.include?(command.upcase)
@@ -73,7 +73,7 @@ class CommandProcessor
   private
 
   def command(_args)
-    RESPData.new('OK', string_type: :simple)
+    RESPData.new(RESPData::SimpleString.new("OK"))
   end
 
   def echo(args)
@@ -81,7 +81,7 @@ class CommandProcessor
   end
 
   def ping(_args)
-    @repl_manager.role == 'slave' ? nil : RESPData.new('PONG', string_type: :simple)
+    @repl_manager.role == 'slave' ? nil : RESPData.new(RESPData::SimpleString.new("PONG"))
   end
 
   def info(_args)
@@ -93,7 +93,7 @@ class CommandProcessor
       return RESPData.new(['REPLCONF', 'ACK', @repl_manager.replica_offset.to_s])
     end
 
-    RESPData.new('OK', string_type: :simple)
+    RESPData.new(RESPData::SimpleString.new('OK'))
   end
 
   def psync(args)
@@ -103,7 +103,7 @@ class CommandProcessor
     raise InvalidCommandError unless req_repl_id == '?' && req_repl_offset == '-1'
 
     full_resync_resp = "FULLRESYNC #{@repl_manager.master_replid} #{@repl_manager.master_repl_offset}"
-    RESPData.new(full_resync_resp, string_type: :simple)
+    RESPData.new(RESPData::SimpleString.new(full_resync_resp))
   end
 
   def wait(args)
@@ -166,7 +166,7 @@ class CommandProcessor
 
   def multi(_args)
     @transaction_in_progress = true
-    RESPData.new('OK', string_type: :simple)
+    RESPData.new(RESPData::SimpleString.new("OK"))
   end
 
   def exec(_args)
@@ -196,7 +196,7 @@ class CommandProcessor
     @transaction_in_progress = false
     @queued_commands = []
 
-    RESPData.new('OK', string_type: 'simple')
+    RESPData.new(RESPData::SimpleString.new('OK'))
   end
 
   def xadd(args)
@@ -269,7 +269,7 @@ class CommandProcessor
                   'string'
                 end
 
-    RESPData.new(resp_type, string_type: :simple)
+    RESPData.new(RESPData::SimpleString.new(resp_type))
   end
 
   def xrange(args)
@@ -366,7 +366,7 @@ class CommandProcessor
 
     @data_store.set(key, value, expiry_seconds)
 
-    @repl_manager.role == 'slave' ? nil : RESPData.new('OK', string_type: :simple)
+    @repl_manager.role == 'slave' ? nil : RESPData.new(RESPData::SimpleString.new('OK'))
   end
 
   def parse_expiry_seconds(expiry)
