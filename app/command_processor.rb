@@ -58,7 +58,7 @@ class CommandProcessor
 
     if !TRANSACTION_CLEARING_CMDS.include?(command.upcase) && @transaction_in_progress
       @queued_commands << [command, args]
-      return RESPData.new(RESPData::SimpleString.new("QUEUED"))
+      return RESPData.new(RESPData::SimpleString.new('QUEUED'))
     end
 
     if VALID_COMMANDS.include?(command.upcase)
@@ -73,7 +73,7 @@ class CommandProcessor
   private
 
   def command(_args)
-    RESPData.new(RESPData::SimpleString.new("OK"))
+    RESPData.new(RESPData::SimpleString.new('OK'))
   end
 
   def echo(args)
@@ -81,7 +81,7 @@ class CommandProcessor
   end
 
   def ping(_args)
-    @repl_manager.role == 'slave' ? nil : RESPData.new(RESPData::SimpleString.new("PONG"))
+    @repl_manager.role == 'slave' ? nil : RESPData.new(RESPData::SimpleString.new('PONG'))
   end
 
   def info(_args)
@@ -89,7 +89,7 @@ class CommandProcessor
   end
 
   def replconf(args)
-    if @repl_manager.role == 'slave' && (args&.first == 'GETACK' && args&.last == '*')
+    if @repl_manager.role == 'slave' && args&.first == 'GETACK' && args&.last == '*'
       return RESPData.new(['REPLCONF', 'ACK', @repl_manager.replica_offset.to_s])
     end
 
@@ -166,7 +166,7 @@ class CommandProcessor
 
   def multi(_args)
     @transaction_in_progress = true
-    RESPData.new(RESPData::SimpleString.new("OK"))
+    RESPData.new(RESPData::SimpleString.new('OK'))
   end
 
   def exec(_args)
@@ -348,10 +348,10 @@ class CommandProcessor
   end
 
   def rpush(args)
-    list_key, value = args 
+    list_key, *values = args
 
     list = @data_store.get(list_key) || []
-    list << value 
+    list.concat(values)
     @data_store.set(list_key, list, nil)
 
     RESPData.new(list.length)
