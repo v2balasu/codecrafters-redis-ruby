@@ -28,6 +28,7 @@ class CommandProcessor
     XADD
     XRANGE
     XREAD
+    RPUSH
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -344,6 +345,16 @@ class CommandProcessor
     end
 
     RESPData.new(data)
+  end
+
+  def rpush(args)
+    list_key, value = args 
+
+    list = @data_store.get(list_key) || []
+    list << value 
+    @data_store.set(list_key, list, nil)
+
+    RESPData.new(list.length)
   end
 
   def set(args)
