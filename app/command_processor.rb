@@ -1,5 +1,7 @@
 require_relative 'resp_data'
+require_relative 'redis_stream'
 require 'securerandom'
+require 'timeout'
 
 class InvalidCommandError < StandardError
   def message
@@ -204,58 +206,20 @@ class CommandProcessor
 
   def xadd(args)
     stream_key, raw_entry_id, *entry_kv = args
+    key_values = {}
 
-    entry_id = @data_store.with_stream_lock(stream_key) do |stream, current_entry_id|
-      id = if raw_entry_id != '*'
-             extract_entry_id(raw_entry_id, current_entry_id)
-           else
-             "#{(Time.now.to_f * 1000).to_i}-0"
-           end
+    while entry_kv.any?
+      key, value = entry_kv.shift(2)
+      raise InvalidCommandError, 'Missing value for stream entry' if value.nil?
 
-      entry = { id: id }
-
-      while entry_kv.length > 0
-        key, value = entry_kv.shift(2)
-        raise InvalidCommandError, 'Missing value for stream entry' if value.nil?
-
-        entry[key] = value
-      end
-
-      stream << entry
+      key_values[key] = value
     end
 
-    RESPData.new(entry_id)
-  end
+    stream = @data_store.get(stream_key) || RedisStream.new
+    stream.add_entry(raw_entry_id, key_values)
+    @data_store.set(stream_key, stream, nil)
 
-  def extract_entry_id(raw_entry_id, current_entry_id)
-    current_ms, current_seq_no = current_entry_id&.split('-')&.map(&:to_i)
-    new_ms_and_seq_no = /(?<ms>[0-9]+)-(?<seq_no>\*|[0-9]+)/.match(raw_entry_id)
-
-    if new_ms_and_seq_no
-      new_ms = new_ms_and_seq_no['ms'].to_i
-      new_seq_no = if new_ms_and_seq_no['seq_no'] == '*'
-                     if current_seq_no.nil? || current_ms != new_ms
-                       new_ms == 0 ? 1 : 0
-                     else
-                       current_seq_no + 1
-                     end
-                   else
-                     new_ms_and_seq_no['seq_no'].to_i
-                   end
-    end
-
-    if new_ms.nil? || new_seq_no.nil? || (new_ms.zero? && new_seq_no.zero?)
-      raise InvalidCommandError,
-            'The ID specified in XADD must be greater than 0-0'
-    end
-
-    entry_id = "#{new_ms}-#{new_seq_no}"
-
-    return entry_id if current_ms.nil? || new_ms > current_ms
-
-    return entry_id if new_ms == current_ms && (current_seq_no.nil? || new_seq_no > current_seq_no)
-
-    raise InvalidCommandError, 'The ID specified in XADD is equal or smaller than the target stream top item'
+    RESPData.new(stream.current_id)
   end
 
   def type(args)
@@ -266,7 +230,7 @@ class CommandProcessor
     val = @data_store.get(key)
     resp_type = if val.nil?
                   'none'
-                elsif val.is_a?(Array)
+                elsif val.is_a?(RedisStream)
                   'stream'
                 else
                   'string'
@@ -281,61 +245,46 @@ class CommandProcessor
     # TODO: start_id and end_id validation
     raise InvalidCommandError, 'Invalid inpput' if stream_key.nil?
 
-    range = @data_store.get(stream_key)
+    stream = @data_store.get(stream_key)
 
-    raise InvalidCommandError, 'Stream not found' if range.nil? || !range.is_a?(Array)
+    raise InvalidCommandError, 'Stream not found' if stream.nil? || !stream.is_a?(RedisStream)
 
-    range = range.reject { |entry| entry[:id] < start_id } unless start_id.nil? || start_id == '-'
-    range = range.reject { |entry| entry[:id] > end_id } unless end_id.nil? || end_id == '+'
-
-    data = range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
-
-    RESPData.new(data)
+    range = stream.search_entries(start_id, end_id)
+    RESPData.new(range.map(&:to_resp_array))
   end
 
   def xread(args)
     option = args.shift
-    block_ms = args.shift if option.upcase == 'BLOCK'
-    block_until_read = block_ms&.to_i&.zero?
+    block_ms = (args.shift&.to_i if option.upcase == 'BLOCK')
+    block_seconds = block_ms&.positive? ? block_ms.to_f / 1000.00 : nil
 
     args.reject! { |a| a.upcase == 'STREAMS' }
+
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
 
-    stream_keys = args[0..args.length / 2 - 1]
-    raw_search_ids = args[(args.length / 2)..]
-    search_ids = []
+    stream_key_to_id = parse_stream_id_lookup(args)
+    ranges = {}
 
-    raw_search_ids.each_with_index do |id, idx|
-      if id != '$'
-        search_ids << id
-        next
+    begin
+      Timeout.timeout(block_seconds) do
+        loop do
+          stream_key_to_id.each do |key, id|
+            stream = @data_store.get(key)
+            range = stream.search_after_id(id)
+            ranges[key] = range if range.any?
+          end
+
+          break if ranges.any?
+        end
       end
-
-      stream_key = stream_keys[idx]
-      stream = @data_store.get(stream_key)
-
-      if stream.nil?
-        search_ids << '0-0'
-        next
-      end
-
-      search_ids << stream.last[:id]
+    rescue StandardError
+      nil
     end
 
-    ranges = {}
-    block_until_time = (Time.now + block_ms.to_i / 1000 if block_ms && !block_until_read)
-
-    loop do
-      stream_keys.each_with_index do |key, idx|
-        search_id = search_ids[idx]
-        stream = @data_store.get(key)
-        range = stream&.reject { |entry| entry[:id] <= search_id }
-        next unless range && !range.empty?
-
-        ranges[key] = range
-      end
-
-      break if !ranges.empty? || (block_until_time && (Time.now > block_until_time))
+    stream_key_to_id.each do |key, id|
+      stream = @data_store.get(key)
+      range = stream.search_after_id(id)
+      ranges[key] = range if range.any?
     end
 
     return RESPData.new(RESPData::NullArray.new) if ranges.empty?
@@ -343,11 +292,31 @@ class CommandProcessor
     data = ranges.map do |stream_key, range|
       [
         stream_key,
-        range.map { |entry| [entry[:id], entry.reject { |k| k == :id }.to_a.flatten] }
+        range.map(&:to_resp_array)
       ]
     end
 
     RESPData.new(data)
+  end
+
+  def parse_stream_id_lookup(args)
+    stream_keys = args[0..args.length / 2 - 1]
+    raw_search_ids = args[(args.length / 2)..]
+    lookup = {}
+
+    raw_search_ids.each_with_index do |id, idx|
+      stream_key = stream_keys[idx]
+
+      if id != '$'
+        lookup[stream_key] = id
+        next
+      end
+
+      stream = @data_store.get(stream_key)
+      lookup[stream_key] = stream&.current_id || '0-0'
+    end
+
+    lookup
   end
 
   def rpush(args)

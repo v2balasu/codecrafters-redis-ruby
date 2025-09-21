@@ -7,7 +7,6 @@ class DataStore
   def initialize(rdb_dir, rdb_fname)
     @store = {}
     @mutex = Thread::Mutex.new
-    @stream_mutex = Thread::Mutex.new
     @rdb_dir = rdb_dir
     @rdb_fname = rdb_fname
 
@@ -32,19 +31,6 @@ class DataStore
       item[:expires_at] = Time.now + expiry_seconds unless expiry_seconds.nil?
 
       @store[key] = item
-    end
-  end
-
-  def with_stream_lock(stream_key)
-    @stream_mutex.synchronize do
-      stream = get(stream_key) || []
-      current_entry_id = stream.count.zero? ? nil : stream.last[:id]
-
-      yield(stream, current_entry_id)
-
-      set(stream_key, stream, nil)
-
-      stream.last[:id]
     end
   end
 
