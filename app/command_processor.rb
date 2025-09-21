@@ -29,6 +29,7 @@ class CommandProcessor
     XRANGE
     XREAD
     RPUSH
+    LPUSH
     LRANGE
   ].freeze
 
@@ -353,6 +354,16 @@ class CommandProcessor
 
     list = @data_store.get(list_key) || []
     list.concat(values)
+    @data_store.set(list_key, list, nil)
+
+    RESPData.new(list.length)
+  end
+
+  def lpush(args)
+    list_key, *values = args
+
+    list = @data_store.get(list_key) || []
+    list.prepend(*values.reverse)
     @data_store.set(list_key, list, nil)
 
     RESPData.new(list.length)
