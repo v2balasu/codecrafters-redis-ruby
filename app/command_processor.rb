@@ -364,13 +364,18 @@ class CommandProcessor
 
     raise InvalidCommandError, 'Invalid Params Provided for LRANGE' unless list_key && start_idx && stop_idx
 
-    return RESPData.new([]) if start_idx > stop_idx
-
     list = @data_store.get(list_key)
 
     return RESPData.new([]) unless list
 
-    stop_idx = [list.length - 1, stop_idx].min
+    start_idx = start_idx.negative? ? start_idx + list.length : start_idx
+    stop_idx = stop_idx.negative? ? stop_idx + list.length : stop_idx
+
+    start_idx = [start_idx, list.length - 1].min
+    stop_idx = [stop_idx, list.length - 1].min
+
+    return RESPData.new([]) if start_idx > stop_idx
+
     RESPData.new(list[start_idx..stop_idx])
   end
 
