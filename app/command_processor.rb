@@ -295,7 +295,6 @@ class CommandProcessor
     option = args.shift
     block_ms = args.shift if option.upcase == 'BLOCK'
     block_until_read = block_ms&.to_i&.zero?
-    block_until_time = (Time.now + block_ms.to_i / 1000 if block_ms && !block_until_read)
 
     args.reject! { |a| a.upcase == 'STREAMS' }
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
@@ -322,6 +321,7 @@ class CommandProcessor
     end
 
     ranges = {}
+    block_until_time = (Time.now + block_ms.to_i / 1000 if block_ms && !block_until_read)
 
     loop do
       stream_keys.each_with_index do |key, idx|
