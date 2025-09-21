@@ -353,7 +353,7 @@ class CommandProcessor
     list_key, *values = args
 
     list = @data_store.get(list_key) || []
-    list.concat(values)
+    list.append(*values)
     @data_store.set(list_key, list, nil)
 
     RESPData.new(list.length)
