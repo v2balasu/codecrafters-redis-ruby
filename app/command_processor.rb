@@ -368,8 +368,8 @@ class CommandProcessor
 
     return RESPData.new([]) unless list
 
-    start_idx = start_idx.negative? ? start_idx + list.length : start_idx
-    stop_idx = stop_idx.negative? ? stop_idx + list.length : stop_idx
+    start_idx = start_idx.negative? ? [0, start_idx + list.length].max : start_idx
+    stop_idx = stop_idx.negative? ? [0, stop_idx + list.length].max : stop_idx
 
     start_idx = [start_idx, list.length - 1].min
     stop_idx = [stop_idx, list.length - 1].min
