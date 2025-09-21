@@ -31,6 +31,7 @@ class CommandProcessor
     RPUSH
     LPUSH
     LRANGE
+    LLEN
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -383,6 +384,12 @@ class CommandProcessor
     return RESPData.new([]) if start_idx > stop_idx
 
     RESPData.new(list[start_idx..stop_idx])
+  end
+
+  def llen(args)
+    list_key = args.first
+    list = @data_store.get(list_key)
+    RESPData.new(list&.length || 0)
   end
 
   def normalize_range(range, max_len)
