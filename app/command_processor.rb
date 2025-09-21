@@ -360,23 +360,30 @@ class CommandProcessor
 
   def lrange(args)
     list_key, *range = args
-    start_idx, stop_idx = range.map(&:to_i)
 
-    raise InvalidCommandError, 'Invalid Params Provided for LRANGE' unless list_key && start_idx && stop_idx
+    raise InvalidCommandError, 'Invalid Params Provided for LRANGE' unless list_key && range&.length == 2
 
     list = @data_store.get(list_key)
 
     return RESPData.new([]) unless list
 
-    start_idx = start_idx.negative? ? [0, start_idx + list.length].max : start_idx
-    stop_idx = stop_idx.negative? ? [0, stop_idx + list.length].max : stop_idx
-
-    start_idx = [start_idx, list.length - 1].min
-    stop_idx = [stop_idx, list.length - 1].min
+    start_idx, stop_idx = normalize_range(range, list.length)
 
     return RESPData.new([]) if start_idx > stop_idx
 
     RESPData.new(list[start_idx..stop_idx])
+  end
+
+  def normalize_range(range, max_len)
+    start_idx, stop_idx = range.map(&:to_i)
+
+    start_idx = start_idx.negative? ? [0, start_idx + max_len].max : start_idx
+    stop_idx = stop_idx.negative? ? [0, stop_idx + max_len].max : stop_idx
+
+    start_idx = [start_idx, max_len].min
+    stop_idx = [stop_idx, max_len].min
+
+    [start_idx, stop_idx]
   end
 
   def set(args)
