@@ -29,6 +29,7 @@ class CommandProcessor
     XRANGE
     XREAD
     RPUSH
+    LRANGE
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -355,6 +356,22 @@ class CommandProcessor
     @data_store.set(list_key, list, nil)
 
     RESPData.new(list.length)
+  end
+
+  def lrange(args)
+    list_key, *range = args
+    start_idx, stop_idx = range.map(&:to_i)
+
+    raise InvalidCommandError, 'Invalid Params Provided for LRANGE' unless list_key && start_idx && stop_idx
+
+    return RESPData.new([]) if start_idx > stop_idx
+
+    list = @data_store.get(list_key)
+
+    return RESPData.new([]) unless list
+
+    stop_idx = [list.length - 1, stop_idx].min
+    RESPData.new(list[start_idx..stop_idx])
   end
 
   def set(args)
