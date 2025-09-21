@@ -37,12 +37,18 @@ class DataStore
 
   def with_stream_lock(stream_key)
     @stream_mutex.synchronize do
-      stream = get(stream_key) || []
+      stream = get(stream_key)
+
+      unless stream
+        stream = []
+        new_stream = true
+      end
+
       current_entry_id = stream.count.zero? ? nil : stream.last[:id]
 
       yield(stream, current_entry_id)
 
-      set(stream_key, stream, nil)
+      set(stream_key, stream, nil) if new_stream
 
       stream.last[:id]
     end

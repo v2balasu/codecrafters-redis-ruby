@@ -1,5 +1,6 @@
 require_relative 'resp_data'
 require 'securerandom'
+require 'timeout'
 
 class InvalidCommandError < StandardError
   def message
@@ -295,47 +296,23 @@ class CommandProcessor
 
   def xread(args)
     option = args.shift
-    block_ms = args.shift if option.upcase == 'BLOCK'
-    block_until_read = block_ms&.to_i&.zero?
+    block_ms = (args.shift&.to_i if option.upcase == 'BLOCK')
+    block_seconds = block_ms&.to_f&./ 1000.00
 
     args.reject! { |a| a.upcase == 'STREAMS' }
+
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
 
-    stream_keys = args[0..args.length / 2 - 1]
-    raw_search_ids = args[(args.length / 2)..]
-    search_ids = []
+    stream_key_to_id = parse_stream_id_lookup(args)
 
-    raw_search_ids.each_with_index do |id, idx|
-      if id != '$'
-        search_ids << id
-        next
+    begin
+      ranges = {}
+
+      Timeout.timeout(block_seconds) do
+        ranges = scan_for_updated_ranges(stream_key_to_id) while ranges.empty?
       end
-
-      stream_key = stream_keys[idx]
-      stream = @data_store.get(stream_key)
-
-      if stream.nil?
-        search_ids << '0-0'
-        next
-      end
-
-      search_ids << stream.last[:id]
-    end
-
-    ranges = {}
-    block_until_time = (Time.now + block_ms.to_i / 1000 if block_ms && !block_until_read)
-
-    loop do
-      stream_keys.each_with_index do |key, idx|
-        search_id = search_ids[idx]
-        stream = @data_store.get(key)
-        range = stream&.reject { |entry| entry[:id] <= search_id }
-        next unless range && !range.empty?
-
-        ranges[key] = range
-      end
-
-      break if !ranges.empty? || (block_until_time && (Time.now > block_until_time))
+    rescue StandardError
+      nil
     end
 
     return RESPData.new(RESPData::NullArray.new) if ranges.empty?
@@ -348,6 +325,46 @@ class CommandProcessor
     end
 
     RESPData.new(data)
+  end
+
+  def scan_for_updated_ranges(stream_key_to_id)
+    ranges = {}
+
+    stream_key_to_id.each do |key, search_id|
+      stream = @data_store.get(key)
+      next unless stream
+
+      range = stream.reject { |entry| entry[:id] <= search_id }
+      ranges[key] = range if range.any?
+    end
+
+    ranges
+  end
+
+  def parse_stream_id_lookup(args)
+    stream_keys = args[0..args.length / 2 - 1]
+    raw_search_ids = args[(args.length / 2)..]
+    lookup = {}
+
+    raw_search_ids.each_with_index do |id, idx|
+      stream_key = stream_keys[idx]
+
+      if id != '$'
+        lookup[stream_key] = id
+        next
+      end
+
+      stream = @data_store.get(stream_key)
+
+      unless stream&.any?
+        lookup[stream_key] << '0-0'
+        next
+      end
+
+      lookup[stream_key] = stream.last[:id]
+    end
+
+    lookup
   end
 
   def rpush(args)
