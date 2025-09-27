@@ -6,6 +6,7 @@ class DataStore
 
   def initialize(rdb_dir, rdb_fname)
     @store = {}
+    @subscribers = {}
     @mutex = Thread::Mutex.new
     @stream_mutex = Thread::Mutex.new
     @rdb_dir = rdb_dir
@@ -22,6 +23,15 @@ class DataStore
     end
   end
 
+  def register_subscriber(key, delegate)
+    @subscribers[key] ||= []
+    @subscribers[key] << delegate
+  end
+
+  def unregister_subscriber(key, delegate)
+    @subscribers[key]&.delete(delegate)
+  end
+
   def set(key, value, expiry_seconds)
     @mutex.synchronize do
       item = {
@@ -32,6 +42,7 @@ class DataStore
       item[:expires_at] = Time.now + expiry_seconds unless expiry_seconds.nil?
 
       @store[key] = item
+      @subscribers[key]&.each { |delegate| delegate.call(value) }
     end
   end
 

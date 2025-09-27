@@ -304,15 +304,24 @@ class CommandProcessor
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
 
     stream_key_to_id = parse_stream_id_lookup(args)
+    subscriptions = {}
+    ranges = {}
+
+    stream_key_to_id.each do |key, search_id|
+      subscriptions[key] =
+        lambda do |stream|
+          range = stream.reject { |entry| entry[:id] <= search_id }
+          ranges[key] = range if range.any?
+        end
+    end
 
     begin
-      ranges = {}
-
-      Timeout.timeout(block_seconds) do
-        ranges = scan_for_updated_ranges(stream_key_to_id) while ranges.empty?
-      end
+      subscriptions.each { |key, delegate| @data_store.register_subscriber(key, delegate) }
+      Timeout.timeout(block_seconds)
     rescue StandardError
       nil
+    ensure
+      subscriptions.each { |key, delegate| @data_store.unregister_subscriber(key, delegate) }
     end
 
     return RESPData.new(RESPData::NullArray.new) if ranges.empty?
