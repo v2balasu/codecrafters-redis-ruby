@@ -34,6 +34,7 @@ class CommandProcessor
     LPUSH
     LRANGE
     LLEN
+    LPOP
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -359,6 +360,12 @@ class CommandProcessor
     list_key = args.first
     list = @data_store.get(list_key)
     RESPData.new(list&.length || 0)
+  end
+
+  def lpop(args)
+    list_key = args.first
+    list = @data_store.get(list_key)
+    RESPData.new(list&.shift)
   end
 
   def normalize_range(range, max_len)
