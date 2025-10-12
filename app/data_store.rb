@@ -51,7 +51,6 @@ class DataStore
         @store.delete(key)
         return
       end
-
       return item[:value]
     end
   end
