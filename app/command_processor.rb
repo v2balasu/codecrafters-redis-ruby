@@ -364,14 +364,15 @@ class CommandProcessor
 
   def lpop(args)
     list_key, remove_count_str = args.map(&:strip)
+    list = @data_store.get(list_key)
+    return RESPData.new(list&.shift) unless remove_count_str
 
     begin 
-      remove_count = remove_count_str.nil? ? 1 : Integer(remove_count_str)
+      remove_count = Integer(remove_count_str)
     rescue
       raise InvalidCommandError, "Invalid removal count" 
     end
 
-    list = @data_store.get(list_key)
     RESPData.new(list&.shift(remove_count))
   end
 
