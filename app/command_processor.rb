@@ -363,9 +363,16 @@ class CommandProcessor
   end
 
   def lpop(args)
-    list_key = args.first
+    list_key, remove_count_str = args.map(&:strip)
+
+    begin 
+      remove_count = remove_count_str.nil? ? 1 : Integer(remove_count_str)
+    rescue
+      raise InvalidCommandError, "Invalid removal count" 
+    end
+
     list = @data_store.get(list_key)
-    RESPData.new(list&.shift)
+    RESPData.new(list&.shift(remove_count))
   end
 
   def normalize_range(range, max_len)
