@@ -83,7 +83,7 @@ class CommandProcessor
       clear_blocked_state
       result
     else
-      nil  # Still blocked
+      nil # Still blocked
     end
   end
 
@@ -285,7 +285,7 @@ class CommandProcessor
     block_ms = nil
 
     if option&.upcase == 'BLOCK'
-      args.shift  # Remove 'BLOCK'
+      args.shift # Remove 'BLOCK'
       block_ms = args.shift&.to_i
     end
 
@@ -293,9 +293,7 @@ class CommandProcessor
     result = try_xread(args)
 
     # If data available or not blocking, return immediately
-    if result || block_ms.nil?
-      return result || RESPData.new(RESPData::NullArray.new)
-    end
+    return result || RESPData.new(RESPData::NullArray.new) if result || block_ms.nil?
 
     # Resolve "$" once when blocking starts and capture in lambda
     resolved_args = resolve_dollar_in_xread_args(args.dup)
@@ -429,8 +427,8 @@ class CommandProcessor
 
     begin
       remove_count = Integer(remove_count_str)
-    rescue
-      raise InvalidCommandError, "Invalid removal count"
+    rescue StandardError
+      raise InvalidCommandError, 'Invalid removal count'
     end
 
     RESPData.new(list&.shift(remove_count))
@@ -504,13 +502,16 @@ class CommandProcessor
   end
 
   def subscribe(args)
-    channels = args 
-    
+    channel = args.first
+
+    @subscriptions ||= Set.new
+    @subscriptions.add(channel)
+
     RESPData.new([
-      "subscribe",
-      channels.first,
-      1
-    ])
+                   'subscribe',
+                   channel,
+                   @subscriptions.count
+                 ])
   end
 
   def set(args)
