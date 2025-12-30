@@ -455,7 +455,7 @@ class CommandProcessor
     # Set blocked state with lambda that retries the operation
     set_blocked_state(
       try_fn: -> { try_blpop(keys) },
-      timeout_response_fn: -> { RESPData.new(nil) },
+      timeout_response_fn: -> { RESPData.new(RESPData::NullArray.new) },
       expires_at: timeout_seconds > 0 ? Time.now + timeout_seconds : nil
     )
   end
