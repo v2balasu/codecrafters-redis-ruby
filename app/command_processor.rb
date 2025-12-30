@@ -1,10 +1,6 @@
 require_relative 'resp_data'
 require_relative 'redis_stream'
 require 'securerandom'
-require 'timeout'
-
-# Duplicate of constant from server.rb - will be cleaned up later
-USE_EVENT_LOOP = true
 
 class InvalidCommandError < StandardError
   def message
@@ -51,8 +47,6 @@ class CommandProcessor
   VALID_CONFIG_KEYS = %w[dir dbfilename].freeze
 
   TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
-
-  @@transaction_exec_mutex = Thread::Mutex.new
 
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
@@ -214,14 +208,12 @@ class CommandProcessor
 
     results = []
 
-    @@transaction_exec_mutex.synchronize do
-      while (command, args = @queued_commands.shift)
-        begin
-          resp = send(command.downcase.to_sym, args)
-          results << resp.value
-        rescue InvalidCommandError => e
-          results << e
-        end
+    while (command, args = @queued_commands.shift)
+      begin
+        resp = send(command.downcase.to_sym, args)
+        results << resp.value
+      rescue InvalidCommandError => e
+        results << e
       end
     end
 
@@ -305,30 +297,12 @@ class CommandProcessor
       return result || RESPData.new(RESPData::NullArray.new)
     end
 
-    # Check if we're in event loop mode (by checking if we're in a non-blocking socket context)
-    # In event loop mode, set blocked state and return :blocked symbol
-    if defined?(USE_EVENT_LOOP) && USE_EVENT_LOOP
-      @blocked = true
-      # Resolve "$" once when blocking starts and save the resolved args
-      @blocked_xread_args = resolve_dollar_in_xread_args(args.dup)
-      @blocked_expires_at = block_ms > 0 ? Time.now + (block_ms / 1000.0) : nil
-      return :blocked
-    end
-
-    # Legacy thread-based blocking (for backward compatibility)
-    block_seconds = block_ms > 0 ? block_ms.to_f / 1000.0 : nil
-    begin
-      Timeout.timeout(block_seconds) do
-        loop do
-          result = try_xread(args)
-          break if result
-        end
-      end
-    rescue StandardError
-      nil
-    end
-
-    try_xread(args) || RESPData.new(RESPData::NullArray.new)
+    # Set blocked state and return :blocked symbol for event loop to handle
+    @blocked = true
+    # Resolve "$" once when blocking starts and save the resolved args
+    @blocked_xread_args = resolve_dollar_in_xread_args(args.dup)
+    @blocked_expires_at = block_ms > 0 ? Time.now + (block_ms / 1000.0) : nil
+    :blocked
   end
 
   def try_xread(args)

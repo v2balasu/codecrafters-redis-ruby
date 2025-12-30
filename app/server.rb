@@ -1,13 +1,7 @@
 require 'optparse'
 require 'socket'
-require_relative './client_connection'
 require_relative './data_store'
-require_relative './resp_data'
-require_relative './replication_manager'
 require_relative './event_loop'
-
-# Feature flag to switch between event loop and thread-based architecture
-USE_EVENT_LOOP = true
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port, master_host, master_port, rdb_dir, rdb_fname)
@@ -18,81 +12,21 @@ class YourRedisServer # rubocop:disable Style/Documentation
   end
 
   def start
-    if USE_EVENT_LOOP
-      # Use event loop for all connections and replication
-      event_loop = EventLoop.new(
-        server_socket: server,
-        data_store: @data_store,
-        master_host: @master_host,
-        master_port: @master_port,
-        server_port: @port
-      )
-      event_loop.run
-    else
-      # Legacy thread-based approach
-      role = @master_host.nil? ? 'master' : 'slave'
-      @repl_manager = ReplicationManager.new(role)
-      @repl_manager.role == 'master' ? start_as_master_legacy : start_as_replica_legacy
-    end
+    # Use event loop for all connections and replication
+    event_loop = EventLoop.new(
+      server_socket: server,
+      data_store: @data_store,
+      master_host: @master_host,
+      master_port: @master_port,
+      server_port: @port
+    )
+    event_loop.run
   end
 
   private
 
-  def start_as_master_legacy
-    # Legacy thread-based approach
-    client_listener = Thread.new { process_client_connections }
-    Thread.new { broadcast_to_replicas }
-    client_listener.join
-  end
-
-  def start_as_replica_legacy
-    master_socket = TCPSocket.new(@master_host, @master_port)
-
-    ReplicationManager.complete_master_handshake(socket: master_socket, port: @port)
-
-    master_connection = ClientConnection.new(socket: master_socket,
-                                             command_processor: CommandProcessor.new(data_store: @data_store,
-                                                                                     repl_manager: @repl_manager))
-
-    # Legacy thread-based approach
-    master_listener = Thread.new { master_connection.start }
-    connection_litener = Thread.new { process_client_connections }
-
-    master_listener.join
-    connection_litener.join
-  end
-
   def server
     @server ||= TCPServer.new(@port)
-  end
-
-  def process_client_connections
-    loop do
-      socket = server.accept
-      next unless socket
-
-      create_connection(socket: socket)
-    end
-  end
-
-  def broadcast_to_replicas
-    loop do
-      @repl_manager.broadcast
-      sleep(0.1)
-    end
-  end
-
-  def create_connection(socket:)
-    # TODO: Pooling and state management
-    Thread.new do
-      connection = ClientConnection.new(
-        socket: socket,
-        command_processor: CommandProcessor.new(data_store: @data_store, repl_manager: @repl_manager)
-      )
-      status = connection.start
-
-      @repl_manager.add_connection(socket: socket, data_store: @data_store) if status == :upgrade_to_replica
-    end
   end
 end
 
