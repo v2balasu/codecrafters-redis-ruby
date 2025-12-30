@@ -24,9 +24,11 @@ class ClientConnection
     # Process the data through the parser
     result = @parser.process(data)
 
-    # If we have a complete message, process it
-    if result.status == :complete
+    # Process all complete messages in the buffer
+    while result.status == :complete
       process_message(result.message)
+      # Try to parse another message from the buffer
+      result = @parser.process('')
     end
   rescue IO::WaitReadable
     # No data available right now, will be called again

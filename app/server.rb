@@ -15,38 +15,37 @@ class YourRedisServer # rubocop:disable Style/Documentation
     @data_store = DataStore.new(rdb_dir, rdb_fname)
     @master_host = master_host
     @master_port = master_port
-
-    role = master_host.nil? ? 'master' : 'slave'
-    @repl_manager = ReplicationManager.new(role)
   end
 
   def start
-    @repl_manager.role == 'master' ? start_as_master : start_as_replica
-  end
-
-  private
-
-  def start_as_master
     if USE_EVENT_LOOP
-      # Start broadcast thread (will be moved to event loop in Step 7)
-      Thread.new { broadcast_to_replicas }
-
-      # Use event loop for client connections
+      # Use event loop for all connections and replication
       event_loop = EventLoop.new(
         server_socket: server,
         data_store: @data_store,
-        repl_manager: @repl_manager
+        master_host: @master_host,
+        master_port: @master_port,
+        server_port: @port
       )
       event_loop.run
     else
       # Legacy thread-based approach
-      client_listener = Thread.new { process_client_connections }
-      Thread.new { broadcast_to_replicas }
-      client_listener.join
+      role = @master_host.nil? ? 'master' : 'slave'
+      @repl_manager = ReplicationManager.new(role)
+      @repl_manager.role == 'master' ? start_as_master_legacy : start_as_replica_legacy
     end
   end
 
-  def start_as_replica
+  private
+
+  def start_as_master_legacy
+    # Legacy thread-based approach
+    client_listener = Thread.new { process_client_connections }
+    Thread.new { broadcast_to_replicas }
+    client_listener.join
+  end
+
+  def start_as_replica_legacy
     master_socket = TCPSocket.new(@master_host, @master_port)
 
     ReplicationManager.complete_master_handshake(socket: master_socket, port: @port)
@@ -55,27 +54,12 @@ class YourRedisServer # rubocop:disable Style/Documentation
                                              command_processor: CommandProcessor.new(data_store: @data_store,
                                                                                      repl_manager: @repl_manager))
 
-    if USE_EVENT_LOOP
-      # Master connection still uses thread for now (will be moved to event loop in Step 8)
-      master_listener = Thread.new { master_connection.start }
+    # Legacy thread-based approach
+    master_listener = Thread.new { master_connection.start }
+    connection_litener = Thread.new { process_client_connections }
 
-      # Use event loop for client connections
-      event_loop = EventLoop.new(
-        server_socket: server,
-        data_store: @data_store,
-        repl_manager: @repl_manager
-      )
-      event_loop.run
-
-      master_listener.join
-    else
-      # Legacy thread-based approach
-      master_listener = Thread.new { master_connection.start }
-      connection_litener = Thread.new { process_client_connections }
-
-      master_listener.join
-      connection_litener.join
-    end
+    master_listener.join
+    connection_litener.join
   end
 
   def server

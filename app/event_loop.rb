@@ -1,13 +1,25 @@
 require_relative 'client_connection'
 require_relative 'command_processor'
+require_relative 'replication_manager'
 
 class EventLoop
-  def initialize(server_socket:, data_store:, repl_manager:)
+  attr_reader :repl_manager
+
+  def initialize(server_socket:, data_store:, master_host: nil, master_port: nil, server_port: nil)
     @server_socket = server_socket
     @connections = {}     # socket => ClientConnection instance
     @running = false
     @data_store = data_store
-    @repl_manager = repl_manager
+    @master_host = master_host
+    @master_port = master_port
+    @server_port = server_port
+
+    # Determine role and create replication manager
+    role = @master_host ? 'slave' : 'master'
+    @repl_manager = ReplicationManager.new(role)
+
+    # Set up master connection if we're a replica
+    setup_master_connection if role == 'slave'
   end
 
   # Main event loop
@@ -61,6 +73,9 @@ class EventLoop
           handle_replica_upgrade(socket: socket, connection: conn)
         end
       end
+
+      # Broadcast queued commands to replicas
+      @repl_manager.broadcast
     end
   end
 
@@ -70,6 +85,30 @@ class EventLoop
   end
 
   private
+
+  def setup_master_connection
+    master_socket = TCPSocket.new(@master_host, @master_port)
+
+    # Complete handshake with master
+    ReplicationManager.complete_master_handshake(
+      socket: master_socket,
+      port: @server_port
+    )
+
+    # Create command processor and connection for master
+    command_processor = CommandProcessor.new(
+      data_store: @data_store,
+      repl_manager: @repl_manager
+    )
+
+    connection = ClientConnection.new(
+      socket: master_socket,
+      command_processor: command_processor
+    )
+
+    # Add master connection to event loop
+    @connections[master_socket] = connection
+  end
 
   def accept_new_connection
     client_socket = @server_socket.accept
