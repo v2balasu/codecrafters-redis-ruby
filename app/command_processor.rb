@@ -35,6 +35,7 @@ class CommandProcessor
     LLEN
     LPOP
     BLPOP
+    SUBSCRIBE
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -500,6 +501,16 @@ class CommandProcessor
     stop_idx = [stop_idx, max_len].min
 
     [start_idx, stop_idx]
+  end
+
+  def subscribe(args)
+    channels = args 
+    
+    RESPData.new([
+      "subscribe",
+      channels.first,
+      1
+    ])
   end
 
   def set(args)
