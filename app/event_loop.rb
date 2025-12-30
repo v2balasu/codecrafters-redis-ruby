@@ -10,14 +10,22 @@ class EventLoop
     @running = true
 
     while @running
+      # Clean up closed connections
+      @connections.delete_if { |_, conn| conn.closed? }
+
       # Monitor server socket for new connections, plus all client sockets
-      readable_sockets = [@server_socket] + @connections.keys
-      writable_sockets = @connections.keys
+      readable_sockets = [@server_socket]
+      writable_sockets = []
+
+      @connections.each do |socket, conn|
+        readable_sockets << socket if conn.wants_read?
+        writable_sockets << socket if conn.wants_write?
+      end
 
       # Use IO.select to wait for events
       readable, writable, _ = IO.select(
         readable_sockets,
-        writable_sockets,
+        writable_sockets.empty? ? nil : writable_sockets,
         nil,
         0.1  # 100ms timeout
       )
@@ -48,15 +56,18 @@ class EventLoop
   def accept_new_connection
     client_socket = @server_socket.accept
     # TODO: Create ClientConnection and register it
-    # connection = ClientConnection.new(socket: client_socket, ...)
+    # This will be implemented when we integrate with the server
+    # connection = ClientConnection.new(socket: client_socket, command_processor: ...)
     # @connections[client_socket] = connection
   end
 
   def process_readable(socket:)
-    # TODO: Implement reading from socket
+    connection = @connections[socket]
+    connection&.on_readable
   end
 
   def process_writable(socket:)
-    # TODO: Implement writing to socket
+    connection = @connections[socket]
+    connection&.on_writable
   end
 end
