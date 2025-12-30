@@ -61,6 +61,21 @@ class ClientConnection
     @closed
   end
 
+  # Check if connection is blocked
+  def blocked?
+    @command_processor.blocked?
+  end
+
+  # Resume blocked command (called by event loop)
+  def resume
+    return unless blocked?
+
+    result = @command_processor.resume
+    if result
+      @write_buffer << result.encode
+    end
+  end
+
   # Check if connection needs to be upgraded to replica
   def needs_replica_upgrade?
     @upgrade_to_replica || false
@@ -105,6 +120,9 @@ class ClientConnection
     rescue InvalidCommandError => e
       response = RESPData.new(e)
     end
+
+    # Handle blocked response (don't write anything yet)
+    return if response == :blocked
 
     # Queue response for writing
     if response

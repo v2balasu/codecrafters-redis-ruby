@@ -23,7 +23,8 @@ class EventLoop
       writable_sockets = []
 
       @connections.each do |socket, conn|
-        readable_sockets << socket if conn.wants_read?
+        # Don't read from blocked connections (they're waiting for stream data, not client input)
+        readable_sockets << socket if conn.wants_read? && !conn.blocked?
         writable_sockets << socket if conn.wants_write?
       end
 
@@ -47,6 +48,11 @@ class EventLoop
       # Process writable sockets
       writable&.each do |socket|
         process_writable(socket: socket)
+      end
+
+      # Resume blocked connections (check if stream data is available)
+      @connections.each do |_socket, conn|
+        conn.resume if conn.blocked?
       end
 
       # Handle replica upgrades after writes are flushed
