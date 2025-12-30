@@ -46,6 +46,15 @@ class CommandProcessor
     REPLCONF
   ].freeze
 
+  VALID_SUBSCRIPTION_MODE_COMMANDS = %w[
+    SUBSCRIBE
+    UNSUBSCRIBE
+    PSUBSCRIBE
+    PUNSUBSCRIBE
+    PING
+    QUIT
+  ]
+
   VALID_CONFIG_KEYS = %w[dir dbfilename].freeze
 
   TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
@@ -60,6 +69,8 @@ class CommandProcessor
     @blocked_try_fn = nil              # Proc that attempts the operation
     @blocked_timeout_response_fn = nil # Proc that creates timeout response
     @blocked_expires_at = nil          # When to timeout (nil = infinite)
+    @subscriptions ||= Set.new
+    @subscription_mode_enabled = false
   end
 
   def blocked?
@@ -89,6 +100,11 @@ class CommandProcessor
 
   def execute(command:, args:)
     return nil if @repl_manager.role == 'slave' && !VALID_REPLICA_COMMANDS.include?(command.upcase)
+
+    if @subscription_mode_enabled && !VALID_SUBSCRIPTION_MODE_COMMANDS.include?(command.upcase)
+      raise InvalidCommandError,
+            "Can't execute '#{command}': only #{VALID_SUBSCRIPTION_MODE_COMMANDS.join(' / ')} are allowed in this context"
+    end
 
     if !TRANSACTION_CLEARING_CMDS.include?(command.upcase) && @transaction_in_progress
       @queued_commands << [command, args]
@@ -504,7 +520,7 @@ class CommandProcessor
   def subscribe(args)
     channel = args.first
 
-    @subscriptions ||= Set.new
+    @subscription_mode_enabled = true
     @subscriptions.add(channel)
 
     RESPData.new([
