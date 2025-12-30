@@ -4,6 +4,10 @@ require_relative './client_connection'
 require_relative './data_store'
 require_relative './resp_data'
 require_relative './replication_manager'
+require_relative './event_loop'
+
+# Feature flag to switch between event loop and thread-based architecture
+USE_EVENT_LOOP = true
 
 class YourRedisServer # rubocop:disable Style/Documentation
   def initialize(port, master_host, master_port, rdb_dir, rdb_fname)
@@ -23,9 +27,23 @@ class YourRedisServer # rubocop:disable Style/Documentation
   private
 
   def start_as_master
-    client_listener = Thread.new { process_client_connections }
-    Thread.new { broadcast_to_replicas }
-    client_listener.join
+    if USE_EVENT_LOOP
+      # Start broadcast thread (will be moved to event loop in Step 7)
+      Thread.new { broadcast_to_replicas }
+
+      # Use event loop for client connections
+      event_loop = EventLoop.new(
+        server_socket: server,
+        data_store: @data_store,
+        repl_manager: @repl_manager
+      )
+      event_loop.run
+    else
+      # Legacy thread-based approach
+      client_listener = Thread.new { process_client_connections }
+      Thread.new { broadcast_to_replicas }
+      client_listener.join
+    end
   end
 
   def start_as_replica
@@ -36,11 +54,28 @@ class YourRedisServer # rubocop:disable Style/Documentation
     master_connection = ClientConnection.new(socket: master_socket,
                                              command_processor: CommandProcessor.new(data_store: @data_store,
                                                                                      repl_manager: @repl_manager))
-    master_listener = Thread.new { master_connection.start }
-    connection_litener = Thread.new { process_client_connections }
 
-    master_listener.join
-    connection_litener.join
+    if USE_EVENT_LOOP
+      # Master connection still uses thread for now (will be moved to event loop in Step 8)
+      master_listener = Thread.new { master_connection.start }
+
+      # Use event loop for client connections
+      event_loop = EventLoop.new(
+        server_socket: server,
+        data_store: @data_store,
+        repl_manager: @repl_manager
+      )
+      event_loop.run
+
+      master_listener.join
+    else
+      # Legacy thread-based approach
+      master_listener = Thread.new { master_connection.start }
+      connection_litener = Thread.new { process_client_connections }
+
+      master_listener.join
+      connection_litener.join
+    end
   end
 
   def server

@@ -1,8 +1,13 @@
+require_relative 'client_connection'
+require_relative 'command_processor'
+
 class EventLoop
-  def initialize(server_socket:)
+  def initialize(server_socket:, data_store:, repl_manager:)
     @server_socket = server_socket
     @connections = {}     # socket => ClientConnection instance
     @running = false
+    @data_store = data_store
+    @repl_manager = repl_manager
   end
 
   # Main event loop
@@ -43,6 +48,13 @@ class EventLoop
       writable&.each do |socket|
         process_writable(socket: socket)
       end
+
+      # Handle replica upgrades after writes are flushed
+      @connections.each do |socket, conn|
+        if conn.needs_replica_upgrade? && !conn.wants_write?
+          handle_replica_upgrade(socket: socket, connection: conn)
+        end
+      end
     end
   end
 
@@ -55,10 +67,19 @@ class EventLoop
 
   def accept_new_connection
     client_socket = @server_socket.accept
-    # TODO: Create ClientConnection and register it
-    # This will be implemented when we integrate with the server
-    # connection = ClientConnection.new(socket: client_socket, command_processor: ...)
-    # @connections[client_socket] = connection
+
+    # Create ClientConnection with CommandProcessor
+    command_processor = CommandProcessor.new(
+      data_store: @data_store,
+      repl_manager: @repl_manager
+    )
+
+    connection = ClientConnection.new(
+      socket: client_socket,
+      command_processor: command_processor
+    )
+
+    @connections[client_socket] = connection
   end
 
   def process_readable(socket:)
@@ -69,5 +90,13 @@ class EventLoop
   def process_writable(socket:)
     connection = @connections[socket]
     connection&.on_writable
+  end
+
+  def handle_replica_upgrade(socket:, connection:)
+    # Add the connection to the replication manager
+    @repl_manager.add_connection(socket: socket, data_store: @data_store)
+
+    # Remove from event loop connections (replication manager takes over)
+    @connections.delete(socket)
   end
 end

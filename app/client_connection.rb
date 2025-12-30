@@ -61,6 +61,11 @@ class ClientConnection
     @closed
   end
 
+  # Check if connection needs to be upgraded to replica
+  def needs_replica_upgrade?
+    @upgrade_to_replica || false
+  end
+
   # Close the connection
   def close
     @closed = true
