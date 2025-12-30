@@ -89,27 +89,6 @@ class ClientConnection
     @socket.close unless @socket.closed?
   end
 
-  # Legacy blocking start method for backward compatibility
-  def start
-    loop do
-      message = MessageParser.parse_message(socket: @socket)
-
-      next unless message.is_a?(Array)
-
-      command, *args = message
-
-      begin
-        response = @command_processor.execute(command: command, args: args)
-      rescue InvalidCommandError => e
-        response = RESPData.new(e)
-      end
-
-      response&.encode&.split('\n')&.each { |chunk| @socket.puts(chunk) }
-
-      return :upgrade_to_replica if command.upcase == 'PSYNC'
-    end
-  end
-
   private
 
   def process_message(message)

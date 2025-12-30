@@ -27,7 +27,11 @@ class MessageParser
     end
   end
 
-  # Legacy class method for backward compatibility (uses socket.gets)
+  # Legacy class methods for synchronous blocking operations
+  # Still used for:
+  # - Master handshake during replica initialization (before event loop starts)
+  # - WAIT command replica ACKs (synchronous blocking read with timeout)
+  # TODO: Refactor replication handshake to use event loop pattern
   class << self
     def parse_message(socket:, timeout: nil)
       raise MessageParseTimeoutError unless IO.select([socket], nil, nil, timeout)
