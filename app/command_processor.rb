@@ -131,7 +131,13 @@ class CommandProcessor
   end
 
   def ping(_args)
-    @repl_manager.role == 'slave' ? nil : RESPData.new(RESPData::SimpleString.new('PONG'))
+    if @repl_manager.role == 'slave'
+      nil
+    elsif @subscription_mode_enabled
+      RESPData.new(['pong', ''])
+    else
+      RESPData.new(RESPData::SimpleString.new('PONG'))
+    end
   end
 
   def info(_args)
