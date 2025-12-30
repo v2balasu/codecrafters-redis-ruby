@@ -56,6 +56,10 @@ class DataStore
     @store.keys
   end
 
+  def delete(key)
+    @store.delete(key)
+  end
+
   def to_rdb
     # TODO: Hardcoding a empty DB for now, serialzie to full RDB later
     Base64.decode64(

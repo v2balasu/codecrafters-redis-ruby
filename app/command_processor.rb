@@ -34,6 +34,7 @@ class CommandProcessor
     LRANGE
     LLEN
     LPOP
+    BLPOP
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -55,8 +56,9 @@ class CommandProcessor
     @transaction_in_progress = false
     @queued_commands = []
     @blocked = false
-    @blocked_xread_args = nil
-    @blocked_expires_at = nil
+    @blocked_try_fn = nil              # Proc that attempts the operation
+    @blocked_timeout_response_fn = nil # Proc that creates timeout response
+    @blocked_expires_at = nil          # When to timeout (nil = infinite)
   end
 
   def blocked?
@@ -68,19 +70,16 @@ class CommandProcessor
 
     # Check if timeout expired
     if @blocked_expires_at && Time.now >= @blocked_expires_at
-      @blocked = false
-      @blocked_xread_args = nil
-      @blocked_expires_at = nil
-      return RESPData.new(RESPData::NullArray.new)
+      timeout_response = @blocked_timeout_response_fn.call
+      clear_blocked_state
+      return timeout_response
     end
 
-    # Try to get data
-    result = try_xread(@blocked_xread_args)
+    # Try the operation using the stored lambda
+    result = @blocked_try_fn.call
 
     if result
-      @blocked = false
-      @blocked_xread_args = nil
-      @blocked_expires_at = nil
+      clear_blocked_state
       result
     else
       nil  # Still blocked
@@ -297,12 +296,15 @@ class CommandProcessor
       return result || RESPData.new(RESPData::NullArray.new)
     end
 
-    # Set blocked state and return :blocked symbol for event loop to handle
-    @blocked = true
-    # Resolve "$" once when blocking starts and save the resolved args
-    @blocked_xread_args = resolve_dollar_in_xread_args(args.dup)
-    @blocked_expires_at = block_ms > 0 ? Time.now + (block_ms / 1000.0) : nil
-    :blocked
+    # Resolve "$" once when blocking starts and capture in lambda
+    resolved_args = resolve_dollar_in_xread_args(args.dup)
+
+    # Set blocked state with lambda that retries the operation
+    set_blocked_state(
+      try_fn: -> { try_xread(resolved_args) },
+      timeout_response_fn: -> { RESPData.new(RESPData::NullArray.new) },
+      expires_at: block_ms > 0 ? Time.now + (block_ms / 1000.0) : nil
+    )
   end
 
   def try_xread(args)
@@ -424,13 +426,68 @@ class CommandProcessor
     list = @data_store.get(list_key)
     return RESPData.new(list&.shift) unless remove_count_str
 
-    begin 
+    begin
       remove_count = Integer(remove_count_str)
     rescue
-      raise InvalidCommandError, "Invalid removal count" 
+      raise InvalidCommandError, "Invalid removal count"
     end
 
     RESPData.new(list&.shift(remove_count))
+  end
+
+  def blpop(args)
+    raise InvalidCommandError, 'At least 2 arguments required' if args.length < 2
+
+    timeout_str = args.last
+    keys = args[0..-2]
+
+    begin
+      timeout_seconds = Float(timeout_str)
+      raise InvalidCommandError, 'Timeout must be non-negative' if timeout_seconds < 0
+    rescue ArgumentError
+      raise InvalidCommandError, 'Timeout is not a valid number'
+    end
+
+    # Try to get data immediately
+    result = try_blpop(keys)
+    return result if result
+
+    # Set blocked state with lambda that retries the operation
+    set_blocked_state(
+      try_fn: -> { try_blpop(keys) },
+      timeout_response_fn: -> { RESPData.new(nil) },
+      expires_at: timeout_seconds > 0 ? Time.now + timeout_seconds : nil
+    )
+  end
+
+  def try_blpop(keys)
+    # Check each key in order (left to right)
+    keys.each do |key|
+      list = @data_store.get(key)
+
+      # Skip if key doesn't exist
+      next if list.nil?
+
+      # Validate it's actually a list (array)
+      unless list.is_a?(Array)
+        raise InvalidCommandError, 'WRONGTYPE Operation against a key holding the wrong kind of value'
+      end
+
+      # Skip empty lists
+      next if list.empty?
+
+      # Pop the first element
+      value = list.shift
+
+      # Delete the key if list is now empty (Redis behavior)
+      @data_store.delete(key) if list.empty?
+
+      # Return [key, value] as per Redis BLPOP spec
+      return RESPData.new([key, value])
+    end
+
+    # No data found in any key
+    nil
   end
 
   def normalize_range(range, max_len)
@@ -468,5 +525,20 @@ class CommandProcessor
   def get(args)
     val = @data_store.get(args.first)
     RESPData.new(val)
+  end
+
+  def clear_blocked_state
+    @blocked = false
+    @blocked_try_fn = nil
+    @blocked_timeout_response_fn = nil
+    @blocked_expires_at = nil
+  end
+
+  def set_blocked_state(try_fn:, timeout_response_fn:, expires_at:)
+    @blocked = true
+    @blocked_try_fn = try_fn
+    @blocked_timeout_response_fn = timeout_response_fn
+    @blocked_expires_at = expires_at
+    :blocked
   end
 end
