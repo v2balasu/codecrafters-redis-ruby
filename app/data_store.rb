@@ -6,7 +6,6 @@ class DataStore
 
   def initialize(rdb_dir, rdb_fname)
     @store = {}
-    @mutex = Thread::Mutex.new
     @rdb_dir = rdb_dir
     @rdb_fname = rdb_fname
 
@@ -22,47 +21,39 @@ class DataStore
   end
 
   def set(key, value, expiry_seconds)
-    @mutex.synchronize do
-      item = {
-        value: value,
-        expiry_seconds: expiry_seconds
-      }
+    item = {
+      value: value,
+      expiry_seconds: expiry_seconds
+    }
 
-      item[:expires_at] = Time.now + expiry_seconds unless expiry_seconds.nil?
+    item[:expires_at] = Time.now + expiry_seconds unless expiry_seconds.nil?
 
-      @store[key] = item
-    end
+    @store[key] = item
   end
 
   def update(key, value)
-    @mutex.synchronize do
-      return unless @store[key]
+    return unless @store[key]
 
-      @store[key][:value] = value
-    end
+    @store[key][:value] = value
   end
 
   def get(key)
-    @mutex.synchronize do
-      item = @store[key]
-      return nil unless item
+    item = @store[key]
+    return nil unless item
 
-      if !item[:expires_at].nil? && item[:expires_at] < Time.now
-        @store.delete(key)
-        return
-      end
-      return item[:value]
+    if !item[:expires_at].nil? && item[:expires_at] < Time.now
+      @store.delete(key)
+      return
     end
+    item[:value]
   end
 
   def keys
-    @mutex.synchronize do
-      @store.reject! do |_k, v|
-        !v[:expires_at].nil? && v[:expires_at] < Time.now
-      end
-
-      @store.keys
+    @store.reject! do |_k, v|
+      !v[:expires_at].nil? && v[:expires_at] < Time.now
     end
+
+    @store.keys
   end
 
   def to_rdb

@@ -33,7 +33,6 @@ class ReplicationManager
               :replica_offset
 
   def initialize(role)
-    @mutex = Thread::Mutex.new
     @replica_connections = []
     @replica_commands = []
     @role = role
@@ -68,45 +67,41 @@ class ReplicationManager
     rdb_content = data_store.to_rdb.bytes
     socket.puts "$#{rdb_content.length}\r"
     socket.write rdb_content.pack('C*')
-    @mutex.synchronize { @replica_connections << socket }
+    @replica_connections << socket
   end
 
   def replica_count
-    @mutex.synchronize { @replica_connections.count }
+    @replica_connections.count
   end
 
   def queue_command(command, args, client_id)
-    @mutex.synchronize do
-      resp_command = RESPData.new([command, args].flatten)
-      @replica_commands << [client_id, resp_command.encode]
-    end
+    resp_command = RESPData.new([command, args].flatten)
+    @replica_commands << [client_id, resp_command.encode]
   end
 
   def ack_replicas(client_id:)
-    @mutex.synchronize do
-      unless @clients_broadcasted.include?(client_id)
-        @replicas_acked[client_id] = nil
-        return
-      end
-
-      @replicas_acked[client_id] ||= []
-
-      unhealthy_connections = []
-
-      @replica_connections.each do |connection|
-        next if @replicas_acked[client_id].include?(connection)
-
-        CLIENT_ACK.split('\n').each { |chunk| connection.puts chunk }
-        MessageParser.parse_message(socket: connection, timeout: 0.1)
-        @replicas_acked[client_id] << connection
-      rescue StandardError => e
-        unhealthy_connections << connection unless e.is_a?(MessageParseTimeoutError)
-      end
-
-      @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
-
-      @replicas_acked[client_id].count
+    unless @clients_broadcasted.include?(client_id)
+      @replicas_acked[client_id] = nil
+      return
     end
+
+    @replicas_acked[client_id] ||= []
+
+    unhealthy_connections = []
+
+    @replica_connections.each do |connection|
+      next if @replicas_acked[client_id].include?(connection)
+
+      CLIENT_ACK.split('\n').each { |chunk| connection.puts chunk }
+      MessageParser.parse_message(socket: connection, timeout: 0.1)
+      @replicas_acked[client_id] << connection
+    rescue StandardError => e
+      unhealthy_connections << connection unless e.is_a?(MessageParseTimeoutError)
+    end
+
+    @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
+
+    @replicas_acked[client_id].count
   end
 
   def reset_replica_ack(client_id:)
@@ -115,20 +110,18 @@ class ReplicationManager
   end
 
   def broadcast
-    @mutex.synchronize do
-      unhealthy_connections = []
+    unhealthy_connections = []
 
-      while (client_id, command = @replica_commands.shift)
-        @clients_broadcasted.add(client_id)
+    while (client_id, command = @replica_commands.shift)
+      @clients_broadcasted.add(client_id)
 
-        @replica_connections.each do |connection|
-          command.split('\n').each { |chunk| connection.puts chunk }
-        rescue StandardError
-          unhealthy_connections << connection
-        end
+      @replica_connections.each do |connection|
+        command.split('\n').each { |chunk| connection.puts chunk }
+      rescue StandardError
+        unhealthy_connections << connection
       end
-
-      @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
     end
+
+    @replica_connections.delete_if { |c| unhealthy_connections.include?(c) }
   end
 end

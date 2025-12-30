@@ -1,7 +1,6 @@
 require_relative 'resp_data'
 require_relative 'redis_stream'
 require 'securerandom'
-require 'timeout'
 
 class InvalidCommandError < StandardError
   def message
@@ -49,14 +48,43 @@ class CommandProcessor
 
   TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
 
-  @@transaction_exec_mutex = Thread::Mutex.new
-
   def initialize(data_store:, repl_manager:)
     @data_store = data_store
     @repl_manager = repl_manager
     @client_id = SecureRandom.uuid
     @transaction_in_progress = false
     @queued_commands = []
+    @blocked = false
+    @blocked_xread_args = nil
+    @blocked_expires_at = nil
+  end
+
+  def blocked?
+    @blocked
+  end
+
+  def resume
+    return nil unless @blocked
+
+    # Check if timeout expired
+    if @blocked_expires_at && Time.now >= @blocked_expires_at
+      @blocked = false
+      @blocked_xread_args = nil
+      @blocked_expires_at = nil
+      return RESPData.new(RESPData::NullArray.new)
+    end
+
+    # Try to get data
+    result = try_xread(@blocked_xread_args)
+
+    if result
+      @blocked = false
+      @blocked_xread_args = nil
+      @blocked_expires_at = nil
+      result
+    else
+      nil  # Still blocked
+    end
   end
 
   def execute(command:, args:)
@@ -180,14 +208,12 @@ class CommandProcessor
 
     results = []
 
-    @@transaction_exec_mutex.synchronize do
-      while (command, args = @queued_commands.shift)
-        begin
-          resp = send(command.downcase.to_sym, args)
-          results << resp.value
-        rescue InvalidCommandError => e
-          results << e
-        end
+    while (command, args = @queued_commands.shift)
+      begin
+        resp = send(command.downcase.to_sym, args)
+        results << resp.value
+      rescue InvalidCommandError => e
+        results << e
       end
     end
 
@@ -255,10 +281,32 @@ class CommandProcessor
   end
 
   def xread(args)
-    option = args.shift
-    block_ms = (args.shift&.to_i if option.upcase == 'BLOCK')
-    block_seconds = block_ms&.positive? ? block_ms.to_f / 1000.00 : nil
+    option = args.first
+    block_ms = nil
 
+    if option&.upcase == 'BLOCK'
+      args.shift  # Remove 'BLOCK'
+      block_ms = args.shift&.to_i
+    end
+
+    # Try to get data immediately
+    result = try_xread(args)
+
+    # If data available or not blocking, return immediately
+    if result || block_ms.nil?
+      return result || RESPData.new(RESPData::NullArray.new)
+    end
+
+    # Set blocked state and return :blocked symbol for event loop to handle
+    @blocked = true
+    # Resolve "$" once when blocking starts and save the resolved args
+    @blocked_xread_args = resolve_dollar_in_xread_args(args.dup)
+    @blocked_expires_at = block_ms > 0 ? Time.now + (block_ms / 1000.0) : nil
+    :blocked
+  end
+
+  def try_xread(args)
+    args = args.dup
     args.reject! { |a| a.upcase == 'STREAMS' }
 
     raise InvalidCommandError, 'Invalid arg count' unless args.length.even?
@@ -266,29 +314,15 @@ class CommandProcessor
     stream_key_to_id = parse_stream_id_lookup(args)
     ranges = {}
 
-    begin
-      Timeout.timeout(block_seconds) do
-        loop do
-          stream_key_to_id.each do |key, id|
-            stream = @data_store.get(key)
-            range = stream.search_after_id(id)
-            ranges[key] = range if range.any?
-          end
-
-          break if ranges.any?
-        end
-      end
-    rescue StandardError
-      nil
-    end
-
     stream_key_to_id.each do |key, id|
       stream = @data_store.get(key)
+      next unless stream
+
       range = stream.search_after_id(id)
       ranges[key] = range if range.any?
     end
 
-    return RESPData.new(RESPData::NullArray.new) if ranges.empty?
+    return nil if ranges.empty?
 
     data = ranges.map do |stream_key, range|
       [
@@ -318,6 +352,29 @@ class CommandProcessor
     end
 
     lookup
+  end
+
+  def resolve_dollar_in_xread_args(args)
+    # Remove 'STREAMS' keyword if present
+    resolved_args = args.dup
+    resolved_args.reject! { |a| a.upcase == 'STREAMS' }
+
+    stream_keys = resolved_args[0..resolved_args.length / 2 - 1]
+    raw_search_ids = resolved_args[(resolved_args.length / 2)..]
+
+    # Resolve any "$" to actual current stream IDs
+    resolved_ids = raw_search_ids.map.with_index do |id, idx|
+      if id == '$'
+        stream_key = stream_keys[idx]
+        stream = @data_store.get(stream_key)
+        stream&.current_id || '0-0'
+      else
+        id
+      end
+    end
+
+    # Reconstruct args with resolved IDs
+    stream_keys + resolved_ids
   end
 
   def rpush(args)
