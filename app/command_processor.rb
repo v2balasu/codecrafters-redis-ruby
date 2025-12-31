@@ -540,7 +540,9 @@ class CommandProcessor
   end
 
   def publish(args)
-    channel = args.first
+    channel, message = args.take(2)
+
+    SubscriptionManager.instance.publish(channel_name: channel.downcase, message: message)
 
     RESPData.new(SubscriptionManager.instance.client_count(channel_name: channel.downcase))
   end

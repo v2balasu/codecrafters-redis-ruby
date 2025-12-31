@@ -27,4 +27,16 @@ class SubscriptionManager
   def client_count(channel_name:)
     @channel_subscriptions[channel_name]&.count || 0
   end
+
+  def publish(channel_name:, message:)
+    client_ids = @channel_subscriptions[channel_name]
+    return unless client_ids
+
+    resp_message = RESPData.new(['message', channel_name, message]).encode
+
+    callbacks = client_ids
+                .map { |id| @client_callbacks[id] }
+                .compact
+    callbacks.each { |cb| cb.call(resp_message) }
+  end
 end
