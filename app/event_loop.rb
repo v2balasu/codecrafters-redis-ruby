@@ -1,13 +1,15 @@
 require_relative 'client_connection'
 require_relative 'command_processor'
 require_relative 'replication_manager'
+require_relative 'subscription_manager'
+require 'securerandom'
 
 class EventLoop
   attr_reader :repl_manager
 
   def initialize(server_socket:, data_store:, master_host: nil, master_port: nil, server_port: nil)
     @server_socket = server_socket
-    @connections = {}     # socket => ClientConnection instance
+    @connections = {} # socket => ClientConnection instance
     @running = false
     @data_store = data_store
     @master_host = master_host
@@ -41,11 +43,11 @@ class EventLoop
       end
 
       # Use IO.select to wait for events
-      readable, writable, _ = IO.select(
+      readable, writable, = IO.select(
         readable_sockets,
         writable_sockets.empty? ? nil : writable_sockets,
         nil,
-        0.1  # 100ms timeout
+        0.1 # 100ms timeout
       )
 
       # Process readable sockets
@@ -69,9 +71,7 @@ class EventLoop
 
       # Handle replica upgrades after writes are flushed
       @connections.each do |socket, conn|
-        if conn.needs_replica_upgrade? && !conn.wants_write?
-          handle_replica_upgrade(socket: socket, connection: conn)
-        end
+        handle_replica_upgrade(socket: socket, connection: conn) if conn.needs_replica_upgrade? && !conn.wants_write?
       end
 
       # Broadcast queued commands to replicas
@@ -95,15 +95,22 @@ class EventLoop
       port: @server_port
     )
 
-    # Create command processor and connection for master
+    client_id = SecureRandom.uuid
+
     command_processor = CommandProcessor.new(
       data_store: @data_store,
-      repl_manager: @repl_manager
+      repl_manager: @repl_manager,
+      client_id: client_id
     )
 
     connection = ClientConnection.new(
       socket: master_socket,
       command_processor: command_processor
+    )
+
+    SubscriptionManager.instance.register_client(
+      client_id: client_id,
+      publish_callback: ->(message) { connection.instance_variable_get(:@write_buffer) << message }
     )
 
     # Add master connection to event loop
@@ -113,15 +120,22 @@ class EventLoop
   def accept_new_connection
     client_socket = @server_socket.accept
 
-    # Create ClientConnection with CommandProcessor
+    client_id = SecureRandom.uuid
+
     command_processor = CommandProcessor.new(
       data_store: @data_store,
-      repl_manager: @repl_manager
+      repl_manager: @repl_manager,
+      client_id: client_id
     )
 
     connection = ClientConnection.new(
       socket: client_socket,
       command_processor: command_processor
+    )
+
+    SubscriptionManager.instance.register_client(
+      client_id: client_id,
+      publish_callback: ->(message) { connection.instance_variable_get(:@write_buffer) << message }
     )
 
     @connections[client_socket] = connection

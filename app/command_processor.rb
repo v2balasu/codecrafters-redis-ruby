@@ -1,5 +1,6 @@
 require_relative 'resp_data'
 require_relative 'redis_stream'
+require_relative 'subscription_manager'
 require 'securerandom'
 
 class InvalidCommandError < StandardError
@@ -59,17 +60,18 @@ class CommandProcessor
 
   TRANSACTION_CLEARING_CMDS = %w[EXEC DISCARD]
 
-  def initialize(data_store:, repl_manager:)
+  attr_reader :client_id
+
+  def initialize(data_store:, repl_manager:, client_id:)
     @data_store = data_store
     @repl_manager = repl_manager
-    @client_id = SecureRandom.uuid
+    @client_id = client_id
     @transaction_in_progress = false
     @queued_commands = []
     @blocked = false
     @blocked_try_fn = nil              # Proc that attempts the operation
     @blocked_timeout_response_fn = nil # Proc that creates timeout response
     @blocked_expires_at = nil          # When to timeout (nil = infinite)
-    @subscriptions ||= Set.new
     @subscription_mode_enabled = false
   end
 
@@ -527,12 +529,12 @@ class CommandProcessor
     channel = args.first
 
     @subscription_mode_enabled = true
-    @subscriptions.add(channel)
+    SubscriptionManager.instance.subscribe(client_id: @client_id, channel_name: channel.downcase)
 
     RESPData.new([
                    'subscribe',
                    channel,
-                   @subscriptions.count
+                   SubscriptionManager.instance.count_client_subscriptions(client_id: @client_id)
                  ])
   end
 
