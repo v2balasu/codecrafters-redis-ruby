@@ -23,4 +23,8 @@ class SubscriptionManager
       .select { |subs| subs.include?(client_id) }
       .count
   end
+
+  def client_count(channel_name:)
+    @channel_subscriptions[channel_name]&.count || 0
+  end
 end

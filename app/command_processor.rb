@@ -37,6 +37,7 @@ class CommandProcessor
     LPOP
     BLPOP
     SUBSCRIBE
+    PUBLISH
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -536,6 +537,12 @@ class CommandProcessor
                    channel,
                    SubscriptionManager.instance.count_client_subscriptions(client_id: @client_id)
                  ])
+  end
+
+  def publish(args)
+    channel = args.first
+
+    RESPData.new(SubscriptionManager.instance.client_count(channel_name: channel.downcase))
   end
 
   def set(args)
