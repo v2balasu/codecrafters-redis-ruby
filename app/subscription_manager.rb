@@ -17,6 +17,12 @@ class SubscriptionManager
     @channel_subscriptions[channel_name].add(client_id)
   end
 
+  def unsubscribe(client_id:, channel_name:)
+    return unless @channel_subscriptions[channel_name]&.include?(client_id)
+
+    @channel_subscriptions[channel_name].delete(client_id)
+  end
+
   def count_client_subscriptions(client_id:)
     @channel_subscriptions
       .values

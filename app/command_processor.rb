@@ -37,6 +37,7 @@ class CommandProcessor
     LPOP
     BLPOP
     SUBSCRIBE
+    UNSUBSCRIBE
     PUBLISH
   ].freeze
 
@@ -537,6 +538,19 @@ class CommandProcessor
                    channel,
                    SubscriptionManager.instance.count_client_subscriptions(client_id: @client_id)
                  ])
+  end
+
+  def unsubscribe(args)
+    channel = args.first
+    SubscriptionManager.instance.unsubscribe(client_id: @client_id, channel_name: channel.downcase)
+
+    RESPData.new(
+      [
+        'unsubscribe',
+        channel,
+        SubscriptionManager.instance.count_client_subscriptions(client_id: @client_id)
+      ]
+    )
   end
 
   def publish(args)
