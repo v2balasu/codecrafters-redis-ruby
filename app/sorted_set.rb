@@ -27,7 +27,7 @@ class SortedSet
 
   def range(start_index, end_index)
     end_index = [end_index, @sort_list.length - 1].min
-    return [] if start_index > end_index
+    start_index = 0 if start_index < -@sort_list.length
 
     @sort_list.map(&:first)[start_index..end_index]
   end
