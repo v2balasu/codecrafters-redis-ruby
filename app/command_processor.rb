@@ -42,6 +42,7 @@ class CommandProcessor
     UNSUBSCRIBE
     PUBLISH
     ZADD
+    ZRANK
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -584,6 +585,13 @@ class CommandProcessor
     count_inserted = sorted_set.insert(set_entries)
 
     RESPData.new(count_inserted)
+  end
+
+  def zrank(args)
+    set_key, member_key = args
+    sorted_set = @data_store.get(set_key)
+    result = sorted_set&.get_sort_index(member_key)
+    RESPData.new(result)
   end
 
   def set(args)

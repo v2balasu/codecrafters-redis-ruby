@@ -1,6 +1,7 @@
 class SortedSet
   def initialize
     @lookup = {}
+    @sort_list = []
   end
 
   def insert(members)
@@ -15,9 +16,13 @@ class SortedSet
     end
 
     # TODO: Implement SkipList
-    @lookup.sort
+    @sort_list = @lookup.sort_by { |k, v| [v, k] }
 
     new_entries
+  end
+
+  def get_sort_index(key)
+    @sort_list.index { |kv| kv.first == key }
   end
 
   def count
