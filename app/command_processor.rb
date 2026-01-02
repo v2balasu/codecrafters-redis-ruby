@@ -43,6 +43,7 @@ class CommandProcessor
     PUBLISH
     ZADD
     ZRANK
+    ZRANGE
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -591,6 +592,21 @@ class CommandProcessor
     set_key, member_key = args
     sorted_set = @data_store.get(set_key)
     result = sorted_set&.get_sort_index(member_key)
+    RESPData.new(result)
+  end
+
+  def zrange(args)
+    set_key, *indexes = args
+    start_index, end_index = indexes.take(2).map(&:to_i)
+
+    sorted_set = @data_store.get(set_key)
+
+    result = if !sorted_set.is_a?(SortedSet)
+               []
+             else
+               sorted_set.range(start_index, end_index)
+             end
+
     RESPData.new(result)
   end
 

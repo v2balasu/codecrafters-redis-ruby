@@ -25,6 +25,13 @@ class SortedSet
     @sort_list.index { |kv| kv.first == key }
   end
 
+  def range(start_index, end_index)
+    end_index = [end_index, @sort_list.length - 1].min
+    return [] if start_index > end_index
+
+    @sort_list.map(&:first)[start_index..end_index]
+  end
+
   def count
     @lookup.count
   end
