@@ -1,6 +1,8 @@
 require_relative 'resp_data'
 require_relative 'redis_stream'
 require_relative 'subscription_manager'
+require_relative 'sorted_set'
+require 'bigdecimal'
 require 'securerandom'
 
 class InvalidCommandError < StandardError
@@ -39,6 +41,7 @@ class CommandProcessor
     SUBSCRIBE
     UNSUBSCRIBE
     PUBLISH
+    ZADD
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -559,6 +562,22 @@ class CommandProcessor
     SubscriptionManager.instance.publish(channel_name: channel.downcase, message: message)
 
     RESPData.new(SubscriptionManager.instance.client_count(channel_name: channel.downcase))
+  end
+
+  def zadd(args)
+    set_key, score, member = args
+
+    if @data_store.get(set_key)
+      sorted_set = @data_store.get(set_key)
+      raise 'Key in use' unless sorted_set.is_a?(SortedSet)
+    else
+      sorted_set = SortedSet.new
+      @data_store.set(set_key, sorted_set, nil)
+    end
+
+    sorted_set.insert(key: member, value: BigDecimal(score))
+
+    RESPData.new(sorted_set.count)
   end
 
   def set(args)
