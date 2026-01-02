@@ -45,6 +45,7 @@ class CommandProcessor
     ZRANK
     ZRANGE
     ZCARD
+    ZSCORE
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -616,6 +617,13 @@ class CommandProcessor
     sorted_set = @data_store.get(set_key)
     result = sorted_set.is_a?(SortedSet) ? sorted_set.count : 0
     RESPData.new(result)
+  end
+
+  def zscore(args)
+    set_key, member_key = args.take(2)
+    sorted_set = @data_store.get(set_key)
+    result = sorted_set.is_a?(SortedSet) ? sorted_set.get_value(member_key) : nil
+    RESPData.new(result&.to_s)
   end
 
   def set(args)

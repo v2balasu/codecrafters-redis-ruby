@@ -21,6 +21,10 @@ class SortedSet
     new_entries
   end
 
+  def get_value(key)
+    @lookup[key]
+  end
+
   def get_sort_index(key)
     @sort_list.index { |kv| kv.first == key }
   end
