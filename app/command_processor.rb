@@ -42,6 +42,7 @@ class CommandProcessor
     UNSUBSCRIBE
     PUBLISH
     ZADD
+    ZREM
     ZRANK
     ZRANGE
     ZCARD
@@ -588,6 +589,16 @@ class CommandProcessor
     count_inserted = sorted_set.insert(set_entries)
 
     RESPData.new(count_inserted)
+  end
+
+  def zrem(args)
+    set_key, *member_keys = args
+
+    return RESPData.new(0) unless @data_store.get(set_key)
+
+    sorted_set = @data_store.get(set_key)
+    count_removed = sorted_set.remove(member_keys)
+    RESPData.new(count_removed)
   end
 
   def zrank(args)

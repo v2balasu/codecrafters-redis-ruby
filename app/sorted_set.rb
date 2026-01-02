@@ -21,6 +21,20 @@ class SortedSet
     new_entries
   end
 
+  def remove(keys)
+    removed_count = 0
+
+    keys.each do |key|
+      removed_count += 1 if @lookup[key]
+      @lookup.delete(key)
+    end
+
+    # TODO: Implement SkipList
+    @sort_list = @lookup.sort_by { |k, v| [v, k] }
+
+    removed_count
+  end
+
   def get_value(key)
     @lookup[key]
   end
