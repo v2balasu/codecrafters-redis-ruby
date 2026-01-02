@@ -3,13 +3,21 @@ class SortedSet
     @lookup = {}
   end
 
-  def insert(key:, value:)
-    raise 'Value must be BigDecimal' unless value.is_a?(BigDecimal)
+  def insert(members)
+    new_entries = 0
 
-    @lookup[key] = value
+    members.each do |member|
+      key, value = member.values_at(:key, :value)
+      raise 'Value must be BigDecimal' unless value.is_a?(BigDecimal)
+
+      new_entries += 1 unless @lookup[key]
+      @lookup[key] = value
+    end
 
     # TODO: Implement SkipList
     @lookup.sort
+
+    new_entries
   end
 
   def count

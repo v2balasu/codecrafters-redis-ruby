@@ -565,7 +565,7 @@ class CommandProcessor
   end
 
   def zadd(args)
-    set_key, score, member = args
+    set_key, *member_entries = args
 
     if @data_store.get(set_key)
       sorted_set = @data_store.get(set_key)
@@ -575,9 +575,15 @@ class CommandProcessor
       @data_store.set(set_key, sorted_set, nil)
     end
 
-    sorted_set.insert(key: member, value: BigDecimal(score))
+    set_entries = []
+    while member_entries.any?
+      pair = member_entries.shift(2)
+      set_entries << { key: pair.last, value: BigDecimal(pair.first) }
+    end
 
-    RESPData.new(sorted_set.count)
+    count_inserted = sorted_set.insert(set_entries)
+
+    RESPData.new(count_inserted)
   end
 
   def set(args)
