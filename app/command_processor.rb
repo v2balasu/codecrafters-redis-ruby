@@ -44,6 +44,7 @@ class CommandProcessor
     ZADD
     ZRANK
     ZRANGE
+    ZCARD
   ].freeze
 
   VALID_REPLICA_COMMANDS = %w[
@@ -607,6 +608,13 @@ class CommandProcessor
                sorted_set.range(start_index, end_index)
              end
 
+    RESPData.new(result)
+  end
+
+  def zcard(args)
+    set_key = args.first
+    sorted_set = @data_store.get(set_key)
+    result = sorted_set.is_a?(SortedSet) ? sorted_set.count : 0
     RESPData.new(result)
   end
 
